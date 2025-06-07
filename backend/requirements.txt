@@ -1,0 +1,145 @@
+# Flask Web Framework
+Flask==2.3.2
+Flask-CORS==4.0.0
+
+# Authentication and Security
+PyJWT==2.8.0
+bcrypt==4.0.1
+cryptography==41.0.3
+
+# Database
+sqlite3
+
+# HTTP Requests
+requests==2.31.0
+
+# Date and Time
+python-dateutil==2.8.2
+
+# Development and Testing
+pytest==7.4.0
+pytest-flask==1.2.0
+pytest-cov==4.1.0
+
+# Production Server
+gunicorn==21.2.0
+
+# Environment Variables
+python-dotenv==1.0.0
+
+# Logging
+structlog==23.1.0
+
+# Validation
+marshmallow==3.20.1
+
+# Rate Limiting
+Flask-Limiter==3.5.0
+
+# CORS Support
+flask-cors==4.0.0
+
+# JSON Web Tokens
+PyJWT==2.8.0
+
+# Password Hashing
+bcrypt==4.0.1
+
+# HTTP Client
+urllib3==2.0.4
+
+# Configuration Management
+configparser==5.3.0
+
+# System Information
+psutil==5.9.5
+
+# SSL/TLS Support
+pyOpenSSL==23.2.0
+
+# ACME Protocol Support
+acme==2.6.0
+certbot==2.6.0
+
+# Async Support
+asyncio
+
+# File System Operations
+pathlib
+
+# Regular Expressions
+re
+
+# JSON Processing
+json
+
+# Base64 Encoding
+base64
+
+# Hash Functions
+hashlib
+
+# Random Number Generation
+secrets
+
+# String Operations
+string
+
+# Operating System Interface
+os
+
+# System-specific Parameters
+sys
+
+# Time-related Functions
+time
+
+# Date and Time
+datetime
+
+# Type Hints
+typing
+
+# Functional Programming Tools
+functools
+
+# Iterator Functions
+itertools
+
+# Collections
+collections
+
+# Copy Operations
+copy
+
+# Warnings
+warnings
+
+# Logging
+logging
+
+# Threading
+threading
+
+# Subprocess Management
+subprocess
+
+# Socket Programming
+socket
+
+# URL Parsing
+urllib.parse
+
+# HTTP Status Codes
+http.client
+
+# Email Support
+email.mime.text
+email.mime.multipart
+smtplib
+
+# Template Engine
+jinja2==3.1.2
+
+# Werkzeug WSGI Utilities
+Werkzeug==2.3.6
