@@ -29,9 +29,9 @@ volumes:
     driver: local
 
 services:
-  # PostgreSQL数据库 - 使用阿里云镜像
+  # PostgreSQL数据库 - 使用官方镜像配合阿里云镜像加速器
   postgres:
-    image: registry.cn-hangzhou.aliyuncs.com/library/postgres:15-alpine
+    image: postgres:15-alpine
     container_name: ssl-manager-postgres
     restart: unless-stopped
     environment:
@@ -260,9 +260,9 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # Prometheus监控 - 使用阿里云镜像
+  # Prometheus监控 - 使用官方镜像配合阿里云镜像加速器
   prometheus:
-    image: registry.cn-hangzhou.aliyuncs.com/acs/prometheus:latest
+    image: prom/prometheus:v2.45.0
     container_name: ssl-manager-prometheus
     restart: unless-stopped
     command:
@@ -288,9 +288,9 @@ services:
     profiles:
       - monitoring
 
-  # Grafana可视化 - 使用阿里云镜像
+  # Grafana可视化 - 使用官方镜像配合阿里云镜像加速器
   grafana:
-    image: registry.cn-hangzhou.aliyuncs.com/acs/grafana:latest
+    image: grafana/grafana:10.0.0
     container_name: ssl-manager-grafana
     restart: unless-stopped
     environment:

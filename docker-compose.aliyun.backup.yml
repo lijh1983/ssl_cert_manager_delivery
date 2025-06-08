@@ -1,0 +1,236 @@
+# SSL证书自动化管理系统 - 阿里云备选镜像配置
+# 当主要镜像源不可用时的备选方案
+
+version: '3.8'
+
+services:
+  # PostgreSQL数据库 - 备选镜像
+  postgres:
+    image: postgres:14-alpine  # 备选版本
+    container_name: ssl-manager-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ssl_manager
+      POSTGRES_USER: ssl_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ssl_secure_password_2024}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    networks:
+      - ssl-manager-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ssl_user -d ssl_manager"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Redis缓存 - 备选镜像
+  redis:
+    image: redis:6-alpine  # 备选版本
+    container_name: ssl-manager-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_secure_password_2024}
+    volumes:
+      - redis_data:/data
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf
+    ports:
+      - "6379:6379"
+    networks:
+      - ssl-manager-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 后端API服务
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.aliyun.fast
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+      cache_from:
+        - python:3.10-slim
+        - python:3.9-slim  # 备选版本
+        - ssl-manager-backend:latest
+    container_name: ssl-manager-backend
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=production
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=ssl_manager
+      - DB_USER=ssl_user
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-ssl_secure_password_2024}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis_secure_password_2024}
+      - SECRET_KEY=${SECRET_KEY:-ssl_manager_secret_key_2024_very_secure}
+      - ACME_EMAIL=${ACME_EMAIL:-admin@example.com}
+      - DOMAIN_NAME=${DOMAIN_NAME:-localhost}
+    volumes:
+      - ./backend/certs:/app/certs
+      - ./backend/logs:/app/logs
+      - ./backend/data:/app/data
+    ports:
+      - "8000:8000"
+    networks:
+      - ssl-manager-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # 前端Web服务
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.aliyun
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+      cache_from:
+        - node:18-alpine
+        - node:16-alpine  # 备选版本
+        - ssl-manager-frontend:latest
+    container_name: ssl-manager-frontend
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - REACT_APP_API_URL=http://localhost:8000/api
+      - REACT_APP_DOMAIN=${DOMAIN_NAME:-localhost}
+    volumes:
+      - ./frontend/dist:/usr/share/nginx/html
+    ports:
+      - "3000:80"
+    networks:
+      - ssl-manager-network
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx反向代理服务
+  nginx-proxy:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile.proxy.alpine
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+      cache_from:
+        - nginx:alpine
+        - nginx:1.22-alpine  # 备选版本
+        - ssl-manager-nginx-proxy:latest
+    container_name: ssl-manager-nginx-proxy
+    restart: unless-stopped
+    environment:
+      - DOMAIN_NAME=${DOMAIN_NAME:-localhost}
+      - BACKEND_HOST=backend
+      - FRONTEND_HOST=frontend
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/ssl:/etc/nginx/ssl
+      - ./nginx/logs:/var/log/nginx
+      - nginx_cache:/var/cache/nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - ssl-manager-network
+    depends_on:
+      - backend
+      - frontend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Prometheus监控 - 备选镜像
+  prometheus:
+    image: prom/prometheus:v2.40.0  # 备选版本
+    container_name: ssl-manager-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./monitoring/prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - ssl-manager-network
+    profiles:
+      - monitoring
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Grafana可视化 - 备选镜像
+  grafana:
+    image: grafana/grafana:9.5.0  # 备选版本
+    container_name: ssl-manager-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-grafana_admin_2024}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+    ports:
+      - "3001:3000"
+    networks:
+      - ssl-manager-network
+    depends_on:
+      - prometheus
+    profiles:
+      - monitoring
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# 网络配置
+networks:
+  ssl-manager-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# 数据卷配置
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  nginx_cache:
+    driver: local
