@@ -1,0 +1,84 @@
+# SSL证书管理系统后端服务 - systemd服务文件
+# 用于非容器化部署
+# 安装位置: /etc/systemd/system/ssl-manager-backend.service
+
+[Unit]
+Description=SSL Certificate Manager Backend API
+Documentation=https://github.com/lijh1983/ssl_cert_manager_delivery
+After=network.target postgresql.service redis.service
+Wants=network.target
+Requires=postgresql.service
+
+[Service]
+Type=exec
+WorkingDirectory=/opt/ssl-manager/backend
+ExecStart=/opt/ssl-manager/backend/venv/bin/uvicorn src.app:app --host 0.0.0.0 --port 8000 --workers 2
+ExecReload=/bin/kill -HUP $MAINPID
+
+# 重启配置
+Restart=always
+RestartSec=5
+StartLimitInterval=60
+StartLimitBurst=5
+
+# 安全配置
+User=ssl-manager
+Group=ssl-manager
+UMask=0027
+
+# 工作目录权限
+WorkingDirectory=/opt/ssl-manager/backend
+ReadWritePaths=/opt/ssl-manager/backend/logs
+ReadWritePaths=/opt/ssl-manager/backend/data
+ReadWritePaths=/opt/ssl-manager/backend/certs
+ReadOnlyPaths=/opt/ssl-manager/backend/src
+ReadOnlyPaths=/opt/ssl-manager/backend/config
+
+# 环境变量
+Environment=PYTHONPATH=/opt/ssl-manager/backend/src
+Environment=ENVIRONMENT=production
+Environment=LOG_LEVEL=INFO
+EnvironmentFile=-/opt/ssl-manager/backend/.env
+
+# 资源限制
+LimitNOFILE=65536
+LimitNPROC=4096
+MemoryMax=2G
+CPUQuota=200%
+
+# 安全沙箱
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RemoveIPC=true
+RestrictNamespaces=true
+
+# 网络安全
+IPAddressDeny=any
+IPAddressAllow=localhost
+IPAddressAllow=10.0.0.0/8
+IPAddressAllow=172.16.0.0/12
+IPAddressAllow=192.168.0.0/16
+
+# 系统调用过滤
+SystemCallFilter=@system-service
+SystemCallFilter=~@debug @mount @cpu-emulation @obsolete @privileged @reboot @swap @raw-io
+
+# 日志配置
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ssl-manager-backend
+
+# 超时配置
+TimeoutStartSec=60
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

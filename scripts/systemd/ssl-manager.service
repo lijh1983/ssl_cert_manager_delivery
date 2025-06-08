@@ -1,0 +1,52 @@
+# SSL证书管理系统 - systemd服务文件
+# 安装位置: /etc/systemd/system/ssl-manager.service
+# 启用命令: sudo systemctl enable ssl-manager.service
+# 启动命令: sudo systemctl start ssl-manager.service
+
+[Unit]
+Description=SSL Certificate Manager System
+Documentation=https://github.com/lijh1983/ssl_cert_manager_delivery
+After=network.target docker.service
+Wants=network.target
+Requires=docker.service
+
+[Service]
+Type=forking
+RemainAfterExit=yes
+WorkingDirectory=/opt/ssl-manager
+ExecStartPre=/usr/bin/docker-compose -f docker-compose.yml -f docker-compose.prod.yml down
+ExecStart=/usr/bin/docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+ExecStop=/usr/bin/docker-compose -f docker-compose.yml -f docker-compose.prod.yml down
+ExecReload=/usr/bin/docker-compose -f docker-compose.yml -f docker-compose.prod.yml restart
+
+# 重启配置
+Restart=always
+RestartSec=10
+StartLimitInterval=60
+StartLimitBurst=3
+
+# 安全配置
+User=ssl-manager
+Group=ssl-manager
+UMask=0027
+
+# 环境变量
+Environment=COMPOSE_PROJECT_NAME=ssl-manager
+Environment=COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml
+EnvironmentFile=-/opt/ssl-manager/.env
+
+# 资源限制
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# 日志配置
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ssl-manager
+
+# 超时配置
+TimeoutStartSec=300
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target

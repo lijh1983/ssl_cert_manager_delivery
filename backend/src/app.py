@@ -1840,6 +1840,165 @@ def internal_error(error):
         'data': None
     }), 500
 
+# 健康检查和监控端点
+@app.route('/health', methods=['GET'])
+def health_check():
+    """健康检查端点"""
+    try:
+        # 检查数据库连接
+        db.session.execute('SELECT 1')
+        db_status = 'healthy'
+    except Exception as e:
+        db_status = f'unhealthy: {str(e)}'
+
+    # 检查系统资源
+    try:
+        import psutil
+        cpu_percent = psutil.cpu_percent(interval=1)
+        memory = psutil.virtual_memory()
+        disk = psutil.disk_usage('/')
+
+        system_status = {
+            'cpu_percent': cpu_percent,
+            'memory_percent': memory.percent,
+            'disk_percent': disk.percent
+        }
+    except ImportError:
+        system_status = 'psutil not available'
+    except Exception as e:
+        system_status = f'error: {str(e)}'
+
+    # 检查服务状态
+    try:
+        # 检查告警管理器
+        alert_status = 'healthy' if alert_manager else 'not initialized'
+
+        # 检查通知管理器
+        notification_status = 'healthy' if notification_manager else 'not initialized'
+
+        # 检查证书服务
+        cert_service_status = 'healthy' if certificate_service else 'not initialized'
+
+    except Exception as e:
+        alert_status = notification_status = cert_service_status = f'error: {str(e)}'
+
+    health_data = {
+        'status': 'healthy' if db_status == 'healthy' else 'unhealthy',
+        'timestamp': datetime.datetime.utcnow().isoformat(),
+        'version': '1.0.0',
+        'services': {
+            'database': db_status,
+            'alert_manager': alert_status,
+            'notification_manager': notification_status,
+            'certificate_service': cert_service_status
+        },
+        'system': system_status
+    }
+
+    status_code = 200 if health_data['status'] == 'healthy' else 503
+
+    return jsonify({
+        'code': status_code,
+        'message': health_data['status'],
+        'data': health_data
+    }), status_code
+
+@app.route('/ready', methods=['GET'])
+def readiness_check():
+    """就绪检查端点"""
+    try:
+        # 检查数据库是否就绪
+        db.session.execute('SELECT COUNT(*) FROM users')
+
+        # 检查关键服务是否就绪
+        ready = (
+            alert_manager is not None and
+            notification_manager is not None and
+            certificate_service is not None
+        )
+
+        if ready:
+            return jsonify({
+                'code': 200,
+                'message': 'ready',
+                'data': {
+                    'status': 'ready',
+                    'timestamp': datetime.datetime.utcnow().isoformat()
+                }
+            }), 200
+        else:
+            return jsonify({
+                'code': 503,
+                'message': 'not ready',
+                'data': {
+                    'status': 'not ready',
+                    'timestamp': datetime.datetime.utcnow().isoformat()
+                }
+            }), 503
+
+    except Exception as e:
+        return jsonify({
+            'code': 503,
+            'message': 'not ready',
+            'data': {
+                'status': 'not ready',
+                'error': str(e),
+                'timestamp': datetime.datetime.utcnow().isoformat()
+            }
+        }), 503
+
+@app.route('/metrics', methods=['GET'])
+def metrics():
+    """Prometheus监控指标端点"""
+    try:
+        # 获取基本统计信息
+        total_users = User.count()
+        total_servers = Server.count()
+        total_certificates = Certificate.count()
+        active_certificates = Certificate.count_by_status('valid')
+        expired_certificates = Certificate.count_by_status('expired')
+
+        # 获取系统指标
+        try:
+            import psutil
+            cpu_percent = psutil.cpu_percent()
+            memory = psutil.virtual_memory()
+            disk = psutil.disk_usage('/')
+        except ImportError:
+            cpu_percent = memory = disk = None
+
+        # 生成Prometheus格式的指标
+        metrics_data = []
+
+        # 应用指标
+        metrics_data.append(f'ssl_manager_users_total {total_users}')
+        metrics_data.append(f'ssl_manager_servers_total {total_servers}')
+        metrics_data.append(f'ssl_manager_certificates_total {total_certificates}')
+        metrics_data.append(f'ssl_manager_certificates_active {active_certificates}')
+        metrics_data.append(f'ssl_manager_certificates_expired {expired_certificates}')
+
+        # 系统指标
+        if cpu_percent is not None:
+            metrics_data.append(f'ssl_manager_cpu_percent {cpu_percent}')
+        if memory is not None:
+            metrics_data.append(f'ssl_manager_memory_percent {memory.percent}')
+            metrics_data.append(f'ssl_manager_memory_used_bytes {memory.used}')
+            metrics_data.append(f'ssl_manager_memory_total_bytes {memory.total}')
+        if disk is not None:
+            metrics_data.append(f'ssl_manager_disk_percent {disk.percent}')
+            metrics_data.append(f'ssl_manager_disk_used_bytes {disk.used}')
+            metrics_data.append(f'ssl_manager_disk_total_bytes {disk.total}')
+
+        # 添加时间戳
+        import time
+        timestamp = int(time.time() * 1000)
+        metrics_data = [f'{metric} {timestamp}' for metric in metrics_data]
+
+        return '\n'.join(metrics_data) + '\n', 200, {'Content-Type': 'text/plain; charset=utf-8'}
+
+    except Exception as e:
+        return f'# Error generating metrics: {str(e)}\n', 500, {'Content-Type': 'text/plain; charset=utf-8'}
+
 # 启动应用
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
