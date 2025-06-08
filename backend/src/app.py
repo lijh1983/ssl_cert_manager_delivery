@@ -24,6 +24,8 @@ from utils.rate_limiter import init_rate_limiter, rate_limit, strict_rate_limit,
 
 # 导入服务模块
 from services.certificate_service import certificate_service
+from services.alert_manager import alert_manager, AlertRule, AlertType, AlertSeverity
+from services.notification import notification_manager
 
 # 初始化Flask应用
 app = Flask(__name__)
@@ -1019,6 +1021,445 @@ def auto_renew_certificates():
         return jsonify({
             'code': 500,
             'message': '自动续期失败',
+            'data': None
+        }), 500
+
+# ==========================================
+# 告警管理API
+# ==========================================
+
+@app.route('/api/v1/alerts/rules', methods=['GET'])
+@login_required
+@admin_required
+def get_alert_rules():
+    """获取告警规则列表"""
+    try:
+        rules = alert_manager.get_rules()
+
+        return jsonify({
+            'code': 200,
+            'message': 'success',
+            'data': {
+                'rules': [
+                    {
+                        'id': rule.id,
+                        'name': rule.name,
+                        'alert_type': rule.alert_type.value,
+                        'severity': rule.severity.value,
+                        'enabled': rule.enabled,
+                        'conditions': rule.conditions,
+                        'notification_providers': rule.notification_providers,
+                        'notification_template': rule.notification_template,
+                        'cooldown_minutes': rule.cooldown_minutes,
+                        'created_at': rule.created_at.isoformat() if rule.created_at else None,
+                        'updated_at': rule.updated_at.isoformat() if rule.updated_at else None
+                    }
+                    for rule in rules
+                ]
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"获取告警规则失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': '获取告警规则失败',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/alerts/rules', methods=['POST'])
+@login_required
+@admin_required
+@moderate_rate_limit
+@csrf_protect
+@validate_request_data({
+    'name': {
+        'required': True,
+        'type': str,
+        'min_length': 2,
+        'max_length': 100
+    },
+    'alert_type': {
+        'required': True,
+        'type': str,
+        'pattern': r'^(certificate_expiring|certificate_expired|certificate_renewal_failed|server_offline|system_error|quota_exceeded)$'
+    },
+    'severity': {
+        'required': True,
+        'type': str,
+        'pattern': r'^(low|medium|high|critical)$'
+    },
+    'enabled': {
+        'required': False,
+        'type': bool
+    },
+    'conditions': {
+        'required': True,
+        'type': dict
+    },
+    'notification_providers': {
+        'required': True,
+        'type': list
+    },
+    'notification_template': {
+        'required': True,
+        'type': str,
+        'max_length': 50
+    },
+    'cooldown_minutes': {
+        'required': False,
+        'type': int,
+        'min_value': 1,
+        'max_value': 10080  # 一周
+    }
+})
+@sanitize_request_data()
+def create_alert_rule():
+    """创建告警规则"""
+    data = request.get_json()
+
+    try:
+        # 生成规则ID
+        import uuid
+        rule_id = str(uuid.uuid4())
+
+        # 创建告警规则
+        rule = AlertRule(
+            id=rule_id,
+            name=data['name'],
+            alert_type=AlertType(data['alert_type']),
+            severity=AlertSeverity(data['severity']),
+            enabled=data.get('enabled', True),
+            conditions=data['conditions'],
+            notification_providers=data['notification_providers'],
+            notification_template=data['notification_template'],
+            cooldown_minutes=data.get('cooldown_minutes', 60)
+        )
+
+        # 添加规则
+        if alert_manager.add_rule(rule):
+            return jsonify({
+                'code': 200,
+                'message': 'success',
+                'data': {
+                    'rule_id': rule_id,
+                    'message': '告警规则创建成功'
+                }
+            })
+        else:
+            return jsonify({
+                'code': 400,
+                'message': '告警规则创建失败',
+                'data': None
+            }), 400
+
+    except Exception as e:
+        logger.error(f"创建告警规则异常: {e}")
+        return jsonify({
+            'code': 500,
+            'message': '创建告警规则失败',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/alerts/rules/<rule_id>', methods=['PUT'])
+@login_required
+@admin_required
+@moderate_rate_limit
+@csrf_protect
+@validate_request_data({
+    'name': {
+        'required': False,
+        'type': str,
+        'min_length': 2,
+        'max_length': 100
+    },
+    'enabled': {
+        'required': False,
+        'type': bool
+    },
+    'conditions': {
+        'required': False,
+        'type': dict
+    },
+    'notification_providers': {
+        'required': False,
+        'type': list
+    },
+    'cooldown_minutes': {
+        'required': False,
+        'type': int,
+        'min_value': 1,
+        'max_value': 10080
+    }
+})
+@sanitize_request_data()
+def update_alert_rule(rule_id):
+    """更新告警规则"""
+    data = request.get_json()
+
+    try:
+        if alert_manager.update_rule(rule_id, data):
+            return jsonify({
+                'code': 200,
+                'message': 'success',
+                'data': {
+                    'message': '告警规则更新成功'
+                }
+            })
+        else:
+            return jsonify({
+                'code': 404,
+                'message': '告警规则不存在',
+                'data': None
+            }), 404
+
+    except Exception as e:
+        logger.error(f"更新告警规则异常: {e}")
+        return jsonify({
+            'code': 500,
+            'message': '更新告警规则失败',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/alerts/rules/<rule_id>', methods=['DELETE'])
+@login_required
+@admin_required
+@moderate_rate_limit
+@csrf_protect
+def delete_alert_rule(rule_id):
+    """删除告警规则"""
+    try:
+        if alert_manager.delete_rule(rule_id):
+            return jsonify({
+                'code': 200,
+                'message': 'success',
+                'data': {
+                    'message': '告警规则删除成功'
+                }
+            })
+        else:
+            return jsonify({
+                'code': 404,
+                'message': '告警规则不存在',
+                'data': None
+            }), 404
+
+    except Exception as e:
+        logger.error(f"删除告警规则异常: {e}")
+        return jsonify({
+            'code': 500,
+            'message': '删除告警规则失败',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/alerts/active', methods=['GET'])
+@login_required
+def get_active_alerts():
+    """获取活跃告警"""
+    try:
+        alerts = alert_manager.get_active_alerts()
+
+        return jsonify({
+            'code': 200,
+            'message': 'success',
+            'data': {
+                'alerts': [
+                    {
+                        'id': alert.id,
+                        'rule_id': alert.rule_id,
+                        'alert_type': alert.alert_type.value,
+                        'severity': alert.severity.value,
+                        'title': alert.title,
+                        'description': alert.description,
+                        'context': alert.context,
+                        'status': alert.status,
+                        'created_at': alert.created_at.isoformat() if alert.created_at else None,
+                        'last_sent_at': alert.last_sent_at.isoformat() if alert.last_sent_at else None
+                    }
+                    for alert in alerts
+                ]
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"获取活跃告警失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': '获取活跃告警失败',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/alerts/<alert_id>/resolve', methods=['POST'])
+@login_required
+@admin_required
+@csrf_protect
+def resolve_alert(alert_id):
+    """解决告警"""
+    try:
+        if alert_manager.resolve_alert(alert_id):
+            return jsonify({
+                'code': 200,
+                'message': 'success',
+                'data': {
+                    'message': '告警已解决'
+                }
+            })
+        else:
+            return jsonify({
+                'code': 404,
+                'message': '告警不存在',
+                'data': None
+            }), 404
+
+    except Exception as e:
+        logger.error(f"解决告警异常: {e}")
+        return jsonify({
+            'code': 500,
+            'message': '解决告警失败',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/alerts/history', methods=['GET'])
+@login_required
+@admin_required
+def get_alert_history():
+    """获取告警历史"""
+    try:
+        limit = request.args.get('limit', 100, type=int)
+        alerts = alert_manager.get_alert_history(limit)
+
+        return jsonify({
+            'code': 200,
+            'message': 'success',
+            'data': {
+                'alerts': [
+                    {
+                        'id': alert.id,
+                        'rule_id': alert.rule_id,
+                        'alert_type': alert.alert_type.value,
+                        'severity': alert.severity.value,
+                        'title': alert.title,
+                        'description': alert.description,
+                        'status': alert.status,
+                        'created_at': alert.created_at.isoformat() if alert.created_at else None,
+                        'resolved_at': alert.resolved_at.isoformat() if alert.resolved_at else None
+                    }
+                    for alert in alerts
+                ]
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"获取告警历史失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': '获取告警历史失败',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/notifications/providers', methods=['GET'])
+@login_required
+@admin_required
+def get_notification_providers():
+    """获取可用的通知提供商"""
+    try:
+        providers = notification_manager.get_available_providers()
+
+        return jsonify({
+            'code': 200,
+            'message': 'success',
+            'data': {
+                'providers': providers
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"获取通知提供商失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': '获取通知提供商失败',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/notifications/test', methods=['POST'])
+@login_required
+@admin_required
+@strict_rate_limit
+@csrf_protect
+@validate_request_data({
+    'provider': {
+        'required': True,
+        'type': str,
+        'max_length': 50
+    },
+    'recipient': {
+        'required': True,
+        'type': str,
+        'max_length': 200
+    },
+    'message': {
+        'required': False,
+        'type': str,
+        'max_length': 1000
+    }
+})
+@sanitize_request_data()
+def test_notification():
+    """测试通知发送"""
+    data = request.get_json()
+
+    try:
+        # 准备测试消息
+        test_context = {
+            'domain': 'test.example.com',
+            'expires_at': '2024-01-01 00:00:00',
+            'days_remaining': 7,
+            'server_name': '测试服务器',
+            'ca_type': 'Let\'s Encrypt'
+        }
+
+        # 如果指定了自定义消息，使用系统告警模板
+        if data.get('message'):
+            test_context.update({
+                'alert_type': 'system_test',
+                'severity': 'low',
+                'alert_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'description': data['message']
+            })
+            template_name = 'system_alert'
+        else:
+            template_name = 'certificate_expiring'
+
+        # 发送测试通知
+        result = await notification_manager.send_notification(
+            template_name=template_name,
+            context=test_context,
+            providers=[data['provider']]
+        )
+
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': 'success',
+                'data': {
+                    'message': '测试通知发送成功',
+                    'result': result
+                }
+            })
+        else:
+            return jsonify({
+                'code': 400,
+                'message': '测试通知发送失败',
+                'data': {
+                    'errors': result.get('failed', [])
+                }
+            }), 400
+
+    except Exception as e:
+        logger.error(f"测试通知发送异常: {e}")
+        return jsonify({
+            'code': 500,
+            'message': '测试通知发送失败',
             'data': None
         }), 500
 

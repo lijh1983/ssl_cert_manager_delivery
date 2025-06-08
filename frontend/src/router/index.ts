@@ -39,6 +39,11 @@ const router = createRouter({
           component: () => import('@/views/servers/ServerList.vue')
         },
         {
+          path: 'create',
+          name: 'ServerCreate',
+          component: () => import('@/views/servers/ServerCreate.vue')
+        },
+        {
           path: ':id',
           name: 'ServerDetail',
           component: () => import('@/views/servers/ServerDetail.vue')
@@ -57,6 +62,11 @@ const router = createRouter({
           component: () => import('@/views/certificates/CertificateList.vue')
         },
         {
+          path: 'create',
+          name: 'CertificateCreate',
+          component: () => import('@/views/certificates/CertificateCreate.vue')
+        },
+        {
           path: ':id',
           name: 'CertificateDetail',
           component: () => import('@/views/certificates/CertificateDetail.vue')
@@ -71,8 +81,15 @@ const router = createRouter({
       children: [
         {
           path: '',
-          name: 'AlertList',
-          component: () => import('@/views/alerts/AlertList.vue')
+          name: 'ActiveAlerts',
+          component: () => import('@/views/alerts/ActiveAlerts.vue'),
+          meta: { title: '活跃告警' }
+        },
+        {
+          path: 'rules',
+          name: 'AlertRules',
+          component: () => import('@/views/alerts/AlertRules.vue'),
+          meta: { title: '告警规则', requiresAdmin: true }
         }
       ]
     },

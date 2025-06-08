@@ -69,10 +69,21 @@
             <template #title>证书管理</template>
           </el-menu-item>
           
-          <el-menu-item index="/alerts">
-            <el-icon><Bell /></el-icon>
-            <template #title>告警管理</template>
-          </el-menu-item>
+          <el-sub-menu index="/alerts">
+            <template #title>
+              <el-icon><Bell /></el-icon>
+              <span>告警管理</span>
+            </template>
+            <el-menu-item index="/alerts">
+              <template #title>活跃告警</template>
+            </el-menu-item>
+            <el-menu-item
+              v-if="authStore.isAdmin"
+              index="/alerts/rules"
+            >
+              <template #title>告警规则</template>
+            </el-menu-item>
+          </el-sub-menu>
           
           <el-menu-item index="/logs">
             <el-icon><Tickets /></el-icon>
