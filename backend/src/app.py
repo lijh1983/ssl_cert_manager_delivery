@@ -17,6 +17,14 @@ from models.server import Server
 from models.certificate import Certificate
 from models.alert import Alert
 
+# 导入安全模块
+from utils.validators import InputValidator, DataSanitizer, validate_request_data, sanitize_request_data
+from utils.csrf import init_csrf_protection, csrf_protect, require_csrf_token
+from utils.rate_limiter import init_rate_limiter, rate_limit, strict_rate_limit, moderate_rate_limit
+
+# 导入服务模块
+from services.certificate_service import certificate_service
+
 # 初始化Flask应用
 app = Flask(__name__)
 
@@ -26,6 +34,10 @@ app.config['JWT_EXPIRATION'] = 3600  # Token有效期1小时
 
 # 初始化数据库
 init_db()
+
+# 初始化安全模块
+init_csrf_protection(app)
+init_rate_limiter(app)
 
 # 辅助函数
 def generate_token(user_id: int) -> str:
@@ -120,26 +132,49 @@ def server_token_required(f):
 
 # 路由
 @app.route('/api/v1/auth/login', methods=['POST'])
+@strict_rate_limit  # 严格限流：每分钟5次，每小时20次
+@validate_request_data({
+    'username': {
+        'required': True,
+        'type': str,
+        'min_length': 3,
+        'max_length': 30,
+        'validator': InputValidator.validate_username
+    },
+    'password': {
+        'required': True,
+        'type': str,
+        'min_length': 8,
+        'max_length': 128
+    }
+})
+@sanitize_request_data()
 def login():
     """用户登录"""
     data = request.get_json()
-    if not data or 'username' not in data or 'password' not in data:
+
+    # 额外的安全检查
+    username = data['username']
+    password = data['password']
+
+    # 验证用户名格式
+    if not InputValidator.validate_username(username):
         return jsonify({
             'code': 400,
-            'message': '请求参数错误',
+            'message': '用户名格式不正确',
             'data': None
         }), 400
-    
-    user = User.authenticate(data['username'], data['password'])
+
+    user = User.authenticate(username, password)
     if not user:
         return jsonify({
             'code': 401,
             'message': '用户名或密码错误',
             'data': None
         }), 401
-    
+
     token = generate_token(user.id)
-    
+
     return jsonify({
         'code': 200,
         'message': 'success',
@@ -201,16 +236,48 @@ def get_users():
 @app.route('/api/v1/users', methods=['POST'])
 @login_required
 @admin_required
+@moderate_rate_limit  # 中等限流
+@csrf_protect  # CSRF保护
+@validate_request_data({
+    'username': {
+        'required': True,
+        'type': str,
+        'min_length': 3,
+        'max_length': 30,
+        'validator': InputValidator.validate_username
+    },
+    'email': {
+        'required': True,
+        'type': str,
+        'max_length': 100,
+        'validator': InputValidator.validate_email
+    },
+    'password': {
+        'required': True,
+        'type': str,
+        'min_length': 8,
+        'max_length': 128
+    },
+    'role': {
+        'required': False,
+        'type': str,
+        'pattern': r'^(admin|user)$'
+    }
+})
+@sanitize_request_data()
 def create_user():
     """创建用户"""
     data = request.get_json()
-    if not data or 'username' not in data or 'password' not in data or 'email' not in data:
+
+    # 验证密码强度
+    password_valid, password_message = InputValidator.validate_password(data['password'])
+    if not password_valid:
         return jsonify({
             'code': 400,
-            'message': '请求参数错误',
+            'message': password_message,
             'data': None
         }), 400
-    
+
     try:
         user = User.create(
             username=data['username'],
@@ -218,7 +285,7 @@ def create_user():
             password=data['password'],
             role=data.get('role', 'user')
         )
-        
+
         return jsonify({
             'code': 200,
             'message': 'success',
@@ -360,22 +427,32 @@ def get_servers():
 
 @app.route('/api/v1/servers', methods=['POST'])
 @login_required
+@moderate_rate_limit  # 中等限流
+@csrf_protect  # CSRF保护
+@validate_request_data({
+    'name': {
+        'required': True,
+        'type': str,
+        'min_length': 2,
+        'max_length': 50,
+        'validator': InputValidator.validate_server_name
+    },
+    'auto_renew': {
+        'required': False,
+        'type': bool
+    }
+})
+@sanitize_request_data()
 def create_server():
     """创建服务器"""
     data = request.get_json()
-    if not data or 'name' not in data:
-        return jsonify({
-            'code': 400,
-            'message': '请求参数错误',
-            'data': None
-        }), 400
-    
+
     server = Server.create(
         name=data['name'],
         user_id=g.user.id,
         auto_renew=data.get('auto_renew', True)
     )
-    
+
     return jsonify({
         'code': 200,
         'message': 'success',
@@ -582,63 +659,97 @@ def get_certificates():
 
 @app.route('/api/v1/certificates', methods=['POST'])
 @login_required
-def create_certificate():
-    """手动申请证书"""
-    data = request.get_json()
-    if not data or 'domain' not in data or 'server_id' not in data:
-        return jsonify({
-            'code': 400,
-            'message': '请求参数错误',
-            'data': None
-        }), 400
-    
-    server_id = data['server_id']
-    server = Server.get_by_id(server_id)
-    if not server:
-        return jsonify({
-            'code': 404,
-            'message': '服务器不存在',
-            'data': None
-        }), 404
-    
-    # 普通用户只能为自己的服务器申请证书
-    if not g.user.is_admin() and server.user_id != g.user.id:
-        return jsonify({
-            'code': 403,
-            'message': '权限不足',
-            'data': None
-        }), 403
-    
-    # 创建证书记录
-    cert = Certificate.create(
-        domain=data['domain'],
-        type=data.get('type', 'single'),
-        server_id=server_id,
-        ca_type=data.get('ca_type', 'letsencrypt')
-    )
-    
-    # 返回验证信息
-    validation_method = data.get('validation_method', 'dns')
-    validation_info = {
-        'type': validation_method,
-        'record': '_acme-challenge',
-        'value': f'randomvalue{secrets.randbelow(1000)}',
-        'instructions': f"请添加以下DNS记录：_acme-challenge.{data['domain']} TXT {validation_info['value']}"
+@moderate_rate_limit
+@csrf_protect
+@validate_request_data({
+    'domain': {
+        'required': True,
+        'type': str,
+        'max_length': 253,
+        'validator': lambda x: InputValidator.validate_domain(x, allow_wildcard=True)
+    },
+    'server_id': {
+        'required': True,
+        'type': int
+    },
+    'type': {
+        'required': False,
+        'type': str,
+        'pattern': r'^(single|wildcard|multi)$'
+    },
+    'ca_type': {
+        'required': False,
+        'type': str,
+        'pattern': r'^(letsencrypt|zerossl|buypass)$'
+    },
+    'validation_method': {
+        'required': False,
+        'type': str,
+        'pattern': r'^(http|dns)$'
+    },
+    'auto_renew': {
+        'required': False,
+        'type': bool
     }
-    
-    return jsonify({
-        'code': 200,
-        'message': 'success',
-        'data': {
-            'id': cert.id,
-            'domain': cert.domain,
-            'type': cert.type,
-            'status': cert.status,
-            'server_id': cert.server_id,
-            'ca_type': cert.ca_type,
-            'validation': validation_info
-        }
-    })
+})
+@sanitize_request_data()
+def create_certificate():
+    """申请证书"""
+    data = request.get_json()
+
+    # 处理域名列表
+    domains = []
+    if data.get('type') == 'multi':
+        # 多域名证书，域名用逗号分隔
+        domains = [d.strip() for d in data['domain'].split(',')]
+    else:
+        domains = [data['domain']]
+
+    # 验证所有域名格式
+    for domain in domains:
+        if not InputValidator.validate_domain(domain, allow_wildcard=data.get('type') == 'wildcard'):
+            return jsonify({
+                'code': 400,
+                'message': f'域名格式不正确: {domain}',
+                'data': None
+            }), 400
+
+    try:
+        # 使用证书服务申请证书
+        result = certificate_service.request_certificate(
+            user_id=g.user.id,
+            domains=domains,
+            server_id=data['server_id'],
+            ca_type=data.get('ca_type', 'letsencrypt'),
+            validation_method=data.get('validation_method', 'http'),
+            auto_renew=data.get('auto_renew', True)
+        )
+
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': 'success',
+                'data': {
+                    'certificate_id': result['certificate_id'],
+                    'domains': result['domains'],
+                    'expires_at': result['expires_at'],
+                    'message': result['message']
+                }
+            })
+        else:
+            return jsonify({
+                'code': 400,
+                'message': result['error'],
+                'data': None
+            }), 400
+
+    except Exception as e:
+        logger.error(f"证书申请异常: {e}")
+        return jsonify({
+            'code': 500,
+            'message': '证书申请失败',
+            'data': None
+        }), 500
 
 @app.route('/api/v1/certificates/<int:cert_id>', methods=['GET'])
 @login_required
@@ -779,46 +890,160 @@ def delete_certificate(cert_id):
 
 @app.route('/api/v1/certificates/<int:cert_id>/renew', methods=['POST'])
 @login_required
+@moderate_rate_limit
+@csrf_protect
 def renew_certificate(cert_id):
-    """手动续期证书"""
-    cert = Certificate.get_by_id(cert_id)
-    if not cert:
+    """续期证书"""
+    try:
+        # 使用证书服务续期证书
+        result = certificate_service.renew_certificate(cert_id, g.user.id)
+
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': 'success',
+                'data': {
+                    'certificate_id': cert_id,
+                    'renewed': result.get('renewed', False),
+                    'expires_at': result.get('expires_at'),
+                    'message': result['message']
+                }
+            })
+        else:
+            return jsonify({
+                'code': 400,
+                'message': result['error'],
+                'data': None
+            }), 400
+
+    except Exception as e:
+        logger.error(f"证书续期异常: {e}")
         return jsonify({
-            'code': 404,
-            'message': '证书不存在',
+            'code': 500,
+            'message': '证书续期失败',
             'data': None
-        }), 404
-    
-    # 获取服务器信息
-    server = Server.get_by_id(cert.server_id)
-    if not server:
+        }), 500
+
+@app.route('/api/v1/certificates/<int:cert_id>/revoke', methods=['POST'])
+@login_required
+@moderate_rate_limit
+@csrf_protect
+@validate_request_data({
+    'reason': {
+        'required': False,
+        'type': int,
+        'pattern': r'^[0-9]$'
+    }
+})
+def revoke_certificate(cert_id):
+    """撤销证书"""
+    data = request.get_json() or {}
+    reason = data.get('reason', 0)
+
+    try:
+        # 使用证书服务撤销证书
+        result = certificate_service.revoke_certificate(cert_id, g.user.id, reason)
+
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': 'success',
+                'data': {
+                    'certificate_id': cert_id,
+                    'message': result['message']
+                }
+            })
+        else:
+            return jsonify({
+                'code': 400,
+                'message': result['error'],
+                'data': None
+            }), 400
+
+    except Exception as e:
+        logger.error(f"证书撤销异常: {e}")
         return jsonify({
-            'code': 404,
-            'message': '服务器不存在',
+            'code': 500,
+            'message': '证书撤销失败',
             'data': None
-        }), 404
-    
-    # 普通用户只能续期自己的服务器上的证书
-    if not g.user.is_admin() and server.user_id != g.user.id:
+        }), 500
+
+@app.route('/api/v1/certificates/<int:cert_id>/status', methods=['GET'])
+@login_required
+def get_certificate_status(cert_id):
+    """获取证书状态"""
+    try:
+        # 使用证书服务获取证书状态
+        result = certificate_service.get_certificate_status(cert_id)
+
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': 'success',
+                'data': result
+            })
+        else:
+            return jsonify({
+                'code': 404,
+                'message': result['error'],
+                'data': None
+            }), 404
+
+    except Exception as e:
+        logger.error(f"获取证书状态异常: {e}")
         return jsonify({
-            'code': 403,
-            'message': '权限不足',
+            'code': 500,
+            'message': '获取证书状态失败',
             'data': None
-        }), 403
-    
-    # 设置证书状态为续期中
-    cert.renew()
-    
-    return jsonify({
-        'code': 200,
-        'message': 'success',
-        'data': {
-            'id': cert.id,
-            'domain': cert.domain,
-            'status': cert.status,
-            'message': '证书续期任务已提交'
-        }
-    })
+        }), 500
+
+@app.route('/api/v1/certificates/auto-renew', methods=['POST'])
+@login_required
+@admin_required
+@strict_rate_limit
+@csrf_protect
+def auto_renew_certificates():
+    """自动续期所有证书"""
+    try:
+        # 使用证书服务自动续期证书
+        result = certificate_service.auto_renew_certificates()
+
+        return jsonify({
+            'code': 200,
+            'message': 'success',
+            'data': result
+        })
+
+    except Exception as e:
+        logger.error(f"自动续期异常: {e}")
+        return jsonify({
+            'code': 500,
+            'message': '自动续期失败',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/certificates/supported-cas', methods=['GET'])
+@login_required
+def get_supported_cas():
+    """获取支持的CA列表"""
+    try:
+        cas = certificate_service.get_supported_cas()
+
+        return jsonify({
+            'code': 200,
+            'message': 'success',
+            'data': {
+                'cas': cas
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"获取CA列表异常: {e}")
+        return jsonify({
+            'code': 500,
+            'message': '获取CA列表失败',
+            'data': None
+        }), 500
 
 @app.route('/api/v1/certificates/sync', methods=['POST'])
 @server_token_required
