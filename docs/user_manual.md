@@ -1,5 +1,13 @@
 # SSL证书自动化管理系统用户手册
 
+## 📋 目录
+
+- [系统概述](#系统概述)
+- [核心管理脚本使用](#核心管理脚本使用)
+- [Alpine优化工具使用](#alpine优化工具使用)
+- [Web界面使用](#web界面使用)
+- [常见问题](#常见问题)
+
 ## 1. 系统概述
 
 SSL证书自动化管理系统是一个专为网站和服务器管理员设计的证书生命周期管理工具。本系统基于acme.sh开源项目，提供了友好的Web界面和强大的自动化功能，帮助用户轻松管理多台服务器上的SSL证书，实现自动检测、申请、续期和部署，大幅降低证书管理的人工成本和安全风险。
@@ -21,7 +29,97 @@ SSL证书自动化管理系统是一个专为网站和服务器管理员设计�
 - **客户端脚本**：部署在各服务器上，负责证书扫描、申请和续期
 - **数据库**：存储服务器、证书和用户信息
 
-## 2. 快速入门
+## 2. 核心管理脚本使用
+
+系统提供了统一的核心管理脚本，整合了部署、验证、修复、测试等核心功能。
+
+### 2.1 ssl-manager.sh 核心管理脚本
+
+#### 脚本位置
+```bash
+scripts/ssl-manager.sh
+```
+
+#### 基本用法
+```bash
+# 查看帮助信息
+./scripts/ssl-manager.sh help
+
+# 部署系统
+./scripts/ssl-manager.sh deploy --domain your-domain.com --email admin@your-domain.com
+
+# 验证系统
+./scripts/ssl-manager.sh verify --all
+
+# 修复问题
+./scripts/ssl-manager.sh fix --docker-compose
+
+# 查看状态
+./scripts/ssl-manager.sh status
+```
+
+#### 部署命令详解
+```bash
+# 基本部署
+./scripts/ssl-manager.sh deploy --domain ssl.example.com --email admin@example.com
+
+# 阿里云优化部署
+./scripts/ssl-manager.sh deploy --domain ssl.example.com --email admin@example.com --aliyun --monitoring
+```
+
+#### 验证命令详解
+```bash
+# 全面验证
+./scripts/ssl-manager.sh verify --all
+
+# 分项验证
+./scripts/ssl-manager.sh verify --docker    # 验证Docker环境
+./scripts/ssl-manager.sh verify --compose   # 验证Docker Compose配置
+./scripts/ssl-manager.sh verify --network   # 验证网络连接
+```
+
+#### 修复命令详解
+```bash
+./scripts/ssl-manager.sh fix --docker-compose   # 修复Docker Compose配置
+./scripts/ssl-manager.sh fix --python-images    # 修复Python镜像问题
+./scripts/ssl-manager.sh fix --alpine-sources   # 修复Alpine镜像源
+./scripts/ssl-manager.sh fix --permissions      # 修复文件权限
+```
+
+### 2.2 alpine-optimizer.sh Alpine优化工具
+
+#### 脚本位置
+```bash
+scripts/alpine-optimizer.sh
+```
+
+#### 基本用法
+```bash
+# 自动优化Alpine镜像源
+./scripts/alpine-optimizer.sh optimize --auto
+
+# 测试Alpine构建速度
+./scripts/alpine-optimizer.sh test --build
+
+# 验证优化效果
+./scripts/alpine-optimizer.sh verify
+
+# 恢复原始配置
+./scripts/alpine-optimizer.sh restore
+```
+
+#### 优化命令详解
+```bash
+# 自动选择最快镜像源
+./scripts/alpine-optimizer.sh optimize --auto
+
+# 指定镜像源
+./scripts/alpine-optimizer.sh optimize --aliyun  # 使用阿里云镜像源
+./scripts/alpine-optimizer.sh optimize --ustc    # 使用中科大镜像源
+./scripts/alpine-optimizer.sh optimize --tuna    # 使用清华镜像源
+```
+
+## 3. 快速入门
 
 ### 2.1 系统登录
 

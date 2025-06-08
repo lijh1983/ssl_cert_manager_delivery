@@ -36,15 +36,27 @@
 
 ## 🚀 快速部署
 
-### 一键部署脚本
+### 核心管理脚本部署（推荐）
+
+```bash
+# 1. 克隆项目
+git clone https://github.com/lijh1983/ssl_cert_manager_delivery.git
+cd ssl_cert_manager_delivery
+
+# 2. 使用核心管理脚本部署
+chmod +x scripts/ssl-manager.sh
+sudo ./scripts/ssl-manager.sh deploy --domain your-domain.com --email admin@your-domain.com --aliyun --monitoring
+```
+
+### 传统一键部署脚本
 
 ```bash
 # 下载部署脚本
-curl -fsSL https://raw.githubusercontent.com/lijh1983/ssl_cert_manager_delivery/main/scripts/deploy.sh -o deploy.sh
-chmod +x deploy.sh
+curl -fsSL https://raw.githubusercontent.com/lijh1983/ssl_cert_manager_delivery/main/scripts/setup_nginx_proxy.sh -o setup_nginx_proxy.sh
+chmod +x setup_nginx_proxy.sh
 
 # 执行部署（替换为你的域名）
-sudo ./deploy.sh --domain your-domain.com --enable-monitoring --enable-nginx
+sudo ./setup_nginx_proxy.sh --domain your-domain.com --enable-monitoring
 ```
 
 ### 手动部署

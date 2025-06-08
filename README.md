@@ -99,11 +99,15 @@ ssl_cert_manager_delivery/
 │   └── vite.config.ts      # 构建配置
 ├── client/                 # 客户端脚本
 │   └── client.sh           # 客户端安装脚本
-├── scripts/                # 构建脚本
-│   └── build.sh            # 系统构建脚本
+├── scripts/                # 管理脚本
+│   ├── ssl-manager.sh      # 核心管理脚本
+│   ├── alpine-optimizer.sh # Alpine优化工具
+│   └── setup_nginx_proxy.sh # nginx代理设置
 ├── docs/                   # 文档
-│   ├── api_reference.md    # API文档
-│   ├── deployment_guide.md # 部署指南
+│   ├── DEPLOYMENT.md       # 综合部署指南
+│   ├── ALIYUN_DEPLOYMENT.md # 阿里云专用部署指南
+│   ├── PROJECT_STRUCTURE.md # 项目结构说明
+│   ├── api_reference.md    # API参考文档
 │   └── user_manual.md      # 用户手册
 └── tests/                  # 测试用例
     └── run_tests.sh        # 测试脚本
@@ -189,9 +193,9 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
 ### 详细部署文档
-- 📖 **通用部署指南**: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+- 📖 **综合部署指南**: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 - 🌟 **阿里云优化部署**: [docs/ALIYUN_DEPLOYMENT.md](docs/ALIYUN_DEPLOYMENT.md)
-- 🔧 **开发环境配置**: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+- 📋 **项目结构说明**: [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md)
 
 ## 🧪 测试
 
