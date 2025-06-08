@@ -32,38 +32,51 @@
 
 ## 🛠️ 快速开始
 
-### 1. 克隆项目
+### 标准部署
+
+#### 1. 克隆项目
 ```bash
-git clone <repository-url>
+git clone https://github.com/lijh1983/ssl_cert_manager_delivery.git
 cd ssl_cert_manager_delivery
 ```
 
-### 2. 运行构建脚本
+#### 2. 一键部署
 ```bash
-chmod +x scripts/build.sh
-./scripts/build.sh
+# 下载部署脚本
+curl -fsSL https://raw.githubusercontent.com/lijh1983/ssl_cert_manager_delivery/main/scripts/deploy.sh -o deploy.sh
+chmod +x deploy.sh
+
+# 执行部署（替换为你的域名）
+sudo ./deploy.sh --domain your-domain.com --enable-monitoring
 ```
 
-### 3. 配置环境变量
-```bash
-cd backend
-cp .env.example .env
-# 编辑 .env 文件配置相关参数
-```
-
-### 4. 启动服务
-```bash
-# 开发模式
-./start.sh dev
-
-# 生产模式
-./start-prod.sh
-```
-
-### 5. 访问系统
-- 前端地址: http://localhost:3000
-- 后端API: http://localhost:5000
+#### 3. 访问系统
+- 前端地址: http://your-domain.com
+- 后端API: http://your-domain.com:8000
+- 监控面板: http://your-domain.com:3000 (Grafana)
 - 默认账户: admin / admin123
+
+### 🌟 阿里云优化部署（推荐）
+
+如果您使用阿里云ECS，推荐使用优化版部署，**构建时间从100分钟缩短到10-15分钟**：
+
+```bash
+# 1. 克隆项目
+git clone https://github.com/lijh1983/ssl_cert_manager_delivery.git
+cd ssl_cert_manager_delivery
+
+# 2. 阿里云优化部署
+chmod +x scripts/deploy_aliyun.sh
+sudo ./scripts/deploy_aliyun.sh --domain your-domain.com --enable-monitoring
+```
+
+#### 阿里云优化特性
+- ✅ **镜像加速**: 使用阿里云Docker镜像源，下载速度提升50-70%
+- ✅ **软件源优化**: 配置阿里云APT、NPM、PIP镜像源
+- ✅ **并行构建**: 充分利用多核CPU，减少构建时间
+- ✅ **预构建支持**: 支持基础镜像预构建，减少80%重复构建时间
+
+📖 **详细阿里云部署指南**: [docs/ALIYUN_DEPLOYMENT.md](docs/ALIYUN_DEPLOYMENT.md)
 
 ## 📁 项目结构
 
@@ -155,17 +168,30 @@ export default defineConfig({
 
 ## 🚀 部署指南
 
+### 部署选项
+
+| 部署方式 | 适用场景 | 部署时间 | 特点 |
+|---------|----------|----------|------|
+| **标准部署** | 通用环境 | 15-30分钟 | 兼容性好，适用于各种云平台 |
+| **阿里云优化** | 阿里云ECS | 10-15分钟 | 专门优化，速度快，推荐使用 |
+| **预构建镜像** | 快速部署 | 3-5分钟 | 最快速度，适合批量部署 |
+
 ### 开发环境部署
-1. 按照快速开始步骤安装依赖
-2. 使用 `./start.sh dev` 启动开发服务
+```bash
+# 使用开发环境配置
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+```
 
 ### 生产环境部署
-1. 配置生产环境变量
-2. 构建前端应用: `npm run build`
-3. 使用 `./start-prod.sh` 启动生产服务
-4. 配置Nginx反向代理
+```bash
+# 使用生产环境配置
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
 
-详细部署指南请参考: [docs/deployment_guide.md](docs/deployment_guide.md)
+### 详细部署文档
+- 📖 **通用部署指南**: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+- 🌟 **阿里云优化部署**: [docs/ALIYUN_DEPLOYMENT.md](docs/ALIYUN_DEPLOYMENT.md)
+- 🔧 **开发环境配置**: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
 
 ## 🧪 测试
 
