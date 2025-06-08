@@ -187,7 +187,46 @@ nginx-proxy:
 
 ### 常见问题
 
-#### 1. 端口冲突
+#### 1. Docker镜像拉取失败 ⭐ **最常见问题**
+```bash
+# 错误信息: pull access denied, repository does not exist
+# 原因: 阿里云镜像仓库路径不正确或网络问题
+
+# 解决方案1: 使用快速修复脚本（推荐）
+chmod +x scripts/fix_nginx_image_issue.sh
+./scripts/fix_nginx_image_issue.sh
+
+# 解决方案2: 测试并自动修复
+chmod +x scripts/test_docker_images.sh
+./scripts/test_docker_images.sh --auto-fix
+
+# 解决方案3: 手动修复Dockerfile
+# 将nginx/Dockerfile.proxy中的FROM行改为:
+# FROM nginx:1.24-alpine  # 使用官方镜像
+# 或
+# FROM nginx:alpine       # 使用最新alpine版本
+```
+
+#### 2. 网络连接问题
+```bash
+# 检查Docker镜像源连通性
+ping registry-1.docker.io
+ping registry.cn-hangzhou.aliyuncs.com
+
+# 配置Docker镜像加速器
+sudo mkdir -p /etc/docker
+sudo tee /etc/docker/daemon.json > /dev/null <<EOF
+{
+    "registry-mirrors": [
+        "https://registry.cn-hangzhou.aliyuncs.com",
+        "https://docker.mirrors.ustc.edu.cn"
+    ]
+}
+EOF
+sudo systemctl restart docker
+```
+
+#### 3. 端口冲突
 ```bash
 # 检查端口占用
 sudo ss -tlnp | grep -E ':(80|443)'
@@ -199,7 +238,7 @@ sudo systemctl stop httpd nginx apache2
 ./scripts/restart_services.sh restart nginx
 ```
 
-#### 2. 服务无法访问
+#### 4. 服务无法访问
 ```bash
 # 检查容器状态
 docker-compose -f docker-compose.aliyun.yml ps
@@ -212,7 +251,7 @@ docker network inspect ssl_cert_manager_delivery_ssl-manager-network
 ./scripts/restart_services.sh restart all
 ```
 
-#### 3. API跨域问题
+#### 5. API跨域问题
 ```bash
 # 检查nginx配置
 docker-compose -f docker-compose.aliyun.yml exec nginx-proxy nginx -t
@@ -224,7 +263,7 @@ docker-compose -f docker-compose.aliyun.yml exec nginx-proxy nginx -t
 docker-compose -f docker-compose.aliyun.yml exec nginx-proxy nginx -s reload
 ```
 
-#### 4. 监控面板无法访问
+#### 6. 监控面板无法访问
 ```bash
 # 检查Grafana配置
 docker-compose -f docker-compose.aliyun.yml logs grafana
@@ -234,6 +273,49 @@ docker-compose -f docker-compose.aliyun.yml exec grafana env | grep GF_
 
 # 重启Grafana服务
 ./scripts/restart_services.sh restart grafana
+```
+
+### Docker镜像问题专项解决方案
+
+#### 问题诊断工具
+```bash
+# 1. 运行镜像拉取测试
+./scripts/test_docker_images.sh
+
+# 2. 查看详细的网络和镜像状态
+./scripts/test_docker_images.sh --cleanup
+
+# 3. 自动修复Dockerfile
+./scripts/test_docker_images.sh --auto-fix
+```
+
+#### 手动修复步骤
+```bash
+# 步骤1: 备份原始文件
+cp nginx/Dockerfile.proxy nginx/Dockerfile.proxy.backup
+
+# 步骤2: 测试可用镜像
+docker pull nginx:alpine
+docker pull nginx:1.24-alpine
+
+# 步骤3: 修改Dockerfile
+sed -i 's|FROM.*nginx.*|FROM nginx:alpine|' nginx/Dockerfile.proxy
+
+# 步骤4: 测试构建
+docker build -f nginx/Dockerfile.proxy -t test-nginx ./nginx
+
+# 步骤5: 清理测试镜像
+docker rmi test-nginx
+```
+
+#### 镜像源优先级
+```bash
+# 推荐使用顺序（按可用性和速度排序）:
+1. nginx:alpine                    # 官方最新alpine版本
+2. nginx:1.24-alpine               # 官方指定版本
+3. registry.cn-hangzhou.aliyuncs.com/acs/nginx:1.24-alpine  # 阿里云ACS
+4. dockerproxy.com/library/nginx:alpine                     # Docker代理
+5. docker.mirrors.ustc.edu.cn/library/nginx:alpine         # 中科大镜像
 ```
 
 ### 调试命令

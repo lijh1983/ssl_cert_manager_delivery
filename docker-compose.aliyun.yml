@@ -207,14 +207,21 @@ services:
     build:
       context: ./nginx
       dockerfile: Dockerfile.proxy
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+      cache_from:
+        - nginx:alpine
+        - nginx:1.24-alpine
     image: ssl-manager-nginx-proxy:latest
     container_name: ssl-manager-nginx-proxy
     restart: unless-stopped
     environment:
       DOMAIN_NAME: ${DOMAIN_NAME:-ssl.gzyggl.com}
+      TZ: Asia/Shanghai
     volumes:
       - nginx_proxy_logs:/var/log/nginx
       - ssl_certs:/etc/nginx/ssl
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
     ports:
       - "80:80"
       - "443:443"
@@ -222,9 +229,10 @@ services:
       ssl-manager-network:
         ipv4_address: 172.20.0.40
     depends_on:
-      - frontend
-      - backend
-      - grafana
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "/usr/local/bin/health-check.sh"]
       interval: 30s
@@ -236,6 +244,9 @@ services:
         limits:
           memory: 256M
           cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
     logging:
       driver: "json-file"
       options:
@@ -302,8 +313,6 @@ services:
     profiles:
       - monitoring
 
-# 额外的数据卷用于监控
-volumes:
   prometheus_data:
     driver: local
   grafana_data:
