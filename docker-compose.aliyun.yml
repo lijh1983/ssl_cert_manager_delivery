@@ -96,7 +96,7 @@ services:
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile.aliyun
+      dockerfile: Dockerfile.aliyun.fast
       args:
         - BUILDKIT_INLINE_CACHE=1
       cache_from:
