@@ -55,22 +55,81 @@ stop_services() {
 # 构建nginx代理镜像
 build_nginx_proxy() {
     log_info "构建nginx反向代理镜像..."
-    
+
     # 检查nginx配置文件
     if [ ! -f "nginx/nginx.conf" ]; then
         log_error "nginx配置文件不存在: nginx/nginx.conf"
         exit 1
     fi
-    
+
     if [ ! -f "nginx/conf.d/ssl-manager.conf" ]; then
         log_error "nginx虚拟主机配置文件不存在: nginx/conf.d/ssl-manager.conf"
         exit 1
     fi
-    
-    # 构建镜像
-    docker build -f nginx/Dockerfile.proxy -t ssl-manager-nginx-proxy:latest ./nginx
-    
+
+    # 尝试多种构建方案
+    local build_success=false
+
+    # 方案1: 使用官方Docker Hub镜像
+    log_info "尝试使用官方Docker Hub镜像构建..."
+    if docker build -f nginx/Dockerfile.proxy -t ssl-manager-nginx-proxy:latest ./nginx 2>/dev/null; then
+        log_success "使用官方镜像构建成功"
+        build_success=true
+    else
+        log_warning "官方镜像构建失败，尝试阿里云镜像..."
+
+        # 方案2: 使用阿里云优化镜像
+        if docker build -f nginx/Dockerfile.proxy.aliyun -t ssl-manager-nginx-proxy:latest ./nginx 2>/dev/null; then
+            log_success "使用阿里云镜像构建成功"
+            build_success=true
+        else
+            log_warning "阿里云镜像构建失败，尝试手动拉取基础镜像..."
+
+            # 方案3: 手动拉取基础镜像
+            pull_base_nginx_image
+            if docker build -f nginx/Dockerfile.proxy -t ssl-manager-nginx-proxy:latest ./nginx; then
+                log_success "手动拉取后构建成功"
+                build_success=true
+            fi
+        fi
+    fi
+
+    if [ "$build_success" = "false" ]; then
+        log_error "所有构建方案都失败了"
+        exit 1
+    fi
+
     log_success "nginx反向代理镜像构建完成"
+}
+
+# 手动拉取基础镜像
+pull_base_nginx_image() {
+    log_info "手动拉取nginx基础镜像..."
+
+    # 尝试多个镜像源
+    local images=(
+        "nginx:1.24-alpine"
+        "nginx:1.22-alpine"
+        "nginx:alpine"
+        "registry.cn-hangzhou.aliyuncs.com/acs/nginx:1.24-alpine"
+        "dockerproxy.com/library/nginx:1.24-alpine"
+    )
+
+    for image in "${images[@]}"; do
+        log_info "尝试拉取: $image"
+        if docker pull "$image" 2>/dev/null; then
+            log_success "成功拉取: $image"
+
+            # 标记为我们需要的镜像
+            docker tag "$image" nginx:1.24-alpine 2>/dev/null || true
+            return 0
+        else
+            log_warning "拉取失败: $image"
+        fi
+    done
+
+    log_error "所有镜像源都无法拉取"
+    return 1
 }
 
 # 创建SSL证书目录
