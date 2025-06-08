@@ -23,6 +23,10 @@ volumes:
     driver: local
   nginx_proxy_logs:
     driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
 
 services:
   # PostgreSQL数据库 - 使用阿里云镜像
@@ -312,8 +316,3 @@ services:
           cpus: '0.25'
     profiles:
       - monitoring
-
-  prometheus_data:
-    driver: local
-  grafana_data:
-    driver: local
