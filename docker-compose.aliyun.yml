@@ -100,7 +100,9 @@ services:
       args:
         - BUILDKIT_INLINE_CACHE=1
       cache_from:
-        - registry.cn-hangzhou.aliyuncs.com/library/python:3.10-slim
+        - python:3.10-slim
+        - python:3.11-slim
+        - ssl-manager-backend:latest
     image: ssl-manager-backend:aliyun
     container_name: ssl-manager-backend
     restart: unless-stopped
