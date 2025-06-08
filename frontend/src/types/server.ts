@@ -12,6 +12,7 @@ export interface Server {
   created_at: string
   updated_at: string
   certificates_count?: number
+  certificates?: any[]
   token?: string
   install_command?: string
 }

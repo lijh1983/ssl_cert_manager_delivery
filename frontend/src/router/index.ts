@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { createRouteComponent, componentPreloader } from '@/utils/asyncComponent'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -7,7 +8,7 @@ const router = createRouter({
     {
       path: '/login',
       name: 'Login',
-      component: () => import('@/views/Login.vue'),
+      component: createRouteComponent(() => import('@/views/Login.vue')),
       meta: { requiresAuth: false }
     },
     {
@@ -17,13 +18,13 @@ const router = createRouter({
     {
       path: '/dashboard',
       name: 'Dashboard',
-      component: () => import('@/layouts/MainLayout.vue'),
+      component: createRouteComponent(() => import('@/layouts/MainLayout.vue')),
       meta: { requiresAuth: true },
       children: [
         {
           path: '',
           name: 'DashboardHome',
-          component: () => import('@/views/Dashboard.vue')
+          component: createRouteComponent(() => import('@/views/Dashboard.vue'))
         }
       ]
     },
@@ -36,17 +37,17 @@ const router = createRouter({
         {
           path: '',
           name: 'ServerList',
-          component: () => import('@/views/servers/ServerList.vue')
+          component: createRouteComponent(() => import('@/views/servers/ServerList.vue'))
         },
         {
           path: 'create',
           name: 'ServerCreate',
-          component: () => import('@/views/servers/ServerCreate.vue')
+          component: createRouteComponent(() => import('@/views/servers/ServerCreate.vue'))
         },
         {
           path: ':id',
           name: 'ServerDetail',
-          component: () => import('@/views/servers/ServerDetail.vue')
+          component: createRouteComponent(() => import('@/views/servers/ServerDetail.vue'))
         }
       ]
     },
@@ -59,17 +60,17 @@ const router = createRouter({
         {
           path: '',
           name: 'CertificateList',
-          component: () => import('@/views/certificates/CertificateList.vue')
+          component: createRouteComponent(() => import('@/views/certificates/CertificateList.vue'))
         },
         {
           path: 'create',
           name: 'CertificateCreate',
-          component: () => import('@/views/certificates/CertificateCreate.vue')
+          component: createRouteComponent(() => import('@/views/certificates/CertificateCreate.vue'))
         },
         {
           path: ':id',
           name: 'CertificateDetail',
-          component: () => import('@/views/certificates/CertificateDetail.vue')
+          component: createRouteComponent(() => import('@/views/certificates/CertificateDetail.vue'))
         }
       ]
     },
@@ -82,13 +83,13 @@ const router = createRouter({
         {
           path: '',
           name: 'ActiveAlerts',
-          component: () => import('@/views/alerts/ActiveAlerts.vue'),
+          component: createRouteComponent(() => import('@/views/alerts/ActiveAlerts.vue')),
           meta: { title: '活跃告警' }
         },
         {
           path: 'rules',
           name: 'AlertRules',
-          component: () => import('@/views/alerts/AlertRules.vue'),
+          component: createRouteComponent(() => import('@/views/alerts/AlertRules.vue')),
           meta: { title: '告警规则', requiresAdmin: true }
         }
       ]
@@ -102,7 +103,7 @@ const router = createRouter({
         {
           path: '',
           name: 'LogList',
-          component: () => import('@/views/logs/LogList.vue')
+          component: createRouteComponent(() => import('@/views/logs/LogList.vue'))
         }
       ]
     },
@@ -166,6 +167,23 @@ router.beforeEach((to, from, next) => {
   } else {
     next()
   }
+})
+
+// 预加载关键组件
+router.beforeEach((to, from, next) => {
+  // 根据目标路由预加载相关组件
+  if (to.path.startsWith('/certificates')) {
+    componentPreloader.add('CertificateList', () => import('@/views/certificates/CertificateList.vue'))
+    componentPreloader.add('CertificateDetail', () => import('@/views/certificates/CertificateDetail.vue'))
+  } else if (to.path.startsWith('/servers')) {
+    componentPreloader.add('ServerList', () => import('@/views/servers/ServerList.vue'))
+    componentPreloader.add('ServerDetail', () => import('@/views/servers/ServerDetail.vue'))
+  } else if (to.path.startsWith('/alerts')) {
+    componentPreloader.add('ActiveAlerts', () => import('@/views/alerts/ActiveAlerts.vue'))
+    componentPreloader.add('AlertRules', () => import('@/views/alerts/AlertRules.vue'))
+  }
+
+  next()
 })
 
 export default router

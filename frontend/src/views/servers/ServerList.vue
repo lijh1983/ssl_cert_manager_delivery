@@ -4,7 +4,7 @@
     <div class="page-header">
       <h2>服务器管理</h2>
       <div class="header-actions">
-        <el-button type="primary" :icon="Plus" @click="showCreateDialog">
+        <el-button type="primary" :icon="Plus" @click="goToCreatePage">
           添加服务器
         </el-button>
       </div>
@@ -304,7 +304,12 @@ const handleSelectionChange = (selection: Server[]) => {
   selectedServers.value = selection
 }
 
-// 显示创建对话框
+// 跳转到创建服务器页面
+const goToCreatePage = () => {
+  router.push('/servers/create')
+}
+
+// 显示创建对话框（保留用于兼容性）
 const showCreateDialog = () => {
   currentServer.value = null
   dialogVisible.value = true

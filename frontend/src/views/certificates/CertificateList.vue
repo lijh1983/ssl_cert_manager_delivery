@@ -4,7 +4,7 @@
     <div class="page-header">
       <h2>证书管理</h2>
       <div class="header-actions">
-        <el-button type="primary" :icon="Plus" @click="showCreateDialog">
+        <el-button type="primary" :icon="Plus" @click="goToCreatePage">
           申请证书
         </el-button>
       </div>
@@ -421,7 +421,18 @@ const handleSelectionChange = (selection: Certificate[]) => {
   selectedCertificates.value = selection
 }
 
-// 显示创建对话框
+// 跳转到申请证书页面
+const goToCreatePage = () => {
+  // 如果URL中有server_id参数，传递给申请页面
+  const serverIdFromQuery = route.query.server_id
+  if (serverIdFromQuery) {
+    router.push(`/certificates/create?server_id=${serverIdFromQuery}`)
+  } else {
+    router.push('/certificates/create')
+  }
+}
+
+// 显示创建对话框（保留用于兼容性）
 const showCreateDialog = () => {
   // 如果URL中有server_id参数，自动选择该服务器
   const serverIdFromQuery = route.query.server_id

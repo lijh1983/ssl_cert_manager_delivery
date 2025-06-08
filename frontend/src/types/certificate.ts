@@ -19,9 +19,11 @@ export interface Certificate {
 export interface CreateCertificateRequest {
   domain: string
   server_id: number
-  type?: 'single' | 'wildcard' | 'multi'
-  ca_type?: string
-  validation_method?: 'dns' | 'http'
+  type: 'single' | 'wildcard' | 'multi'
+  ca_type: string
+  validation_method: 'dns' | 'http'
+  auto_renew?: boolean
+  email?: string
 }
 
 export interface UpdateCertificateRequest {
