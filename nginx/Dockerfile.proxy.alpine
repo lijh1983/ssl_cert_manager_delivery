@@ -1,0 +1,214 @@
+# Nginx反向代理Dockerfile - Alpine镜像源优化版
+# 专门针对Alpine Linux包管理器速度优化
+
+FROM nginx:1.24-alpine
+
+# 设置环境变量
+ENV TZ=Asia/Shanghai
+
+# 智能配置Alpine镜像源（自动选择最快的镜像源）
+RUN echo "=== 智能配置Alpine镜像源 ===" && \
+    # 备份原始配置
+    cp /etc/apk/repositories /etc/apk/repositories.backup && \
+    # 检测Alpine版本
+    ALPINE_VERSION=$(cat /etc/alpine-release) && \
+    echo "检测到Alpine版本: $ALPINE_VERSION" && \
+    # 测试并选择最快的镜像源
+    echo "测试镜像源速度..." && \
+    # 候选镜像源列表
+    MIRRORS="mirrors.aliyun.com mirrors.ustc.edu.cn mirrors.tuna.tsinghua.edu.cn dl-cdn.alpinelinux.org" && \
+    FASTEST_MIRROR="" && \
+    FASTEST_TIME=999 && \
+    for mirror in $MIRRORS; do \
+        echo "测试镜像源: $mirror" && \
+        start_time=$(date +%s) && \
+        if timeout 10 wget -q --spider "https://$mirror/alpine/$ALPINE_VERSION/main/x86_64/APKINDEX.tar.gz" 2>/dev/null; then \
+            end_time=$(date +%s) && \
+            duration=$((end_time - start_time)) && \
+            echo "$mirror 响应时间: ${duration}秒" && \
+            if [ $duration -lt $FASTEST_TIME ]; then \
+                FASTEST_TIME=$duration && \
+                FASTEST_MIRROR=$mirror; \
+            fi; \
+        else \
+            echo "$mirror 连接失败"; \
+        fi; \
+    done && \
+    # 使用最快的镜像源，默认使用阿里云
+    SELECTED_MIRROR=${FASTEST_MIRROR:-mirrors.aliyun.com} && \
+    echo "选择镜像源: $SELECTED_MIRROR (响应时间: ${FASTEST_TIME}秒)" && \
+    # 配置选定的镜像源
+    echo "https://$SELECTED_MIRROR/alpine/$ALPINE_VERSION/main" > /etc/apk/repositories && \
+    echo "https://$SELECTED_MIRROR/alpine/$ALPINE_VERSION/community" >> /etc/apk/repositories && \
+    echo "Alpine镜像源配置完成" && \
+    # 显示配置结果
+    echo "当前配置的镜像源:" && \
+    cat /etc/apk/repositories
+
+# 更新包索引（使用优化的镜像源）
+RUN echo "=== 更新包索引 ===" && \
+    apk update && \
+    echo "包索引更新完成"
+
+# 安装基础工具（分批安装，提高成功率）
+RUN echo "=== 安装基础工具 ===" && \
+    apk add --no-cache \
+        curl \
+        wget \
+        ca-certificates \
+    && echo "基础工具安装完成"
+
+RUN echo "=== 安装系统工具 ===" && \
+    apk add --no-cache \
+        tzdata \
+        openssl \
+        bash \
+        netcat-openbsd \
+    && echo "系统工具安装完成"
+
+# 设置时区
+RUN echo "=== 配置时区 ===" && \
+    cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+    echo "Asia/Shanghai" > /etc/timezone && \
+    # 清理tzdata（节省空间）
+    apk del tzdata && \
+    echo "时区配置完成"
+
+# 创建nginx用户
+RUN echo "=== 创建nginx用户 ===" && \
+    addgroup -g 1001 -S nginx-proxy && \
+    adduser -S -D -H -u 1001 -h /var/cache/nginx -s /sbin/nologin -G nginx-proxy -g nginx-proxy nginx-proxy && \
+    echo "nginx用户创建完成"
+
+# 创建必要目录
+RUN echo "=== 创建应用目录 ===" && \
+    mkdir -p /var/cache/nginx/client_temp \
+        /var/cache/nginx/proxy_temp \
+        /var/cache/nginx/fastcgi_temp \
+        /var/cache/nginx/uwsgi_temp \
+        /var/cache/nginx/scgi_temp \
+        /var/log/nginx \
+        /var/run \
+        /etc/nginx/ssl && \
+    chown -R nginx-proxy:nginx-proxy /var/cache/nginx && \
+    chown -R nginx-proxy:nginx-proxy /var/log/nginx && \
+    chown -R nginx-proxy:nginx-proxy /var/run && \
+    chown -R nginx-proxy:nginx-proxy /etc/nginx/ssl && \
+    echo "应用目录创建完成"
+
+# 复制nginx配置
+COPY nginx.conf /etc/nginx/nginx.conf
+COPY conf.d/ /etc/nginx/conf.d/
+
+# 创建SSL目录和默认证书
+RUN echo "=== 创建默认SSL证书 ===" && \
+    mkdir -p /etc/nginx/ssl && \
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+        -keyout /etc/nginx/ssl/default.key \
+        -out /etc/nginx/ssl/default.crt \
+        -subj "/C=CN/ST=Default/L=Default/O=Default/CN=default" && \
+    chown -R nginx-proxy:nginx-proxy /etc/nginx/ssl && \
+    echo "默认SSL证书创建完成"
+
+# 创建健康检查脚本
+RUN echo "=== 创建健康检查脚本 ===" && \
+    cat > /usr/local/bin/health-check.sh <<'EOF' && \
+#!/bin/sh
+# 健康检查脚本
+set -e
+
+# 检查nginx进程
+if ! pgrep nginx > /dev/null; then
+    echo "Nginx进程未运行"
+    exit 1
+fi
+
+# 检查HTTP响应
+if ! curl -f http://localhost:80/health > /dev/null 2>&1; then
+    echo "HTTP健康检查失败"
+    exit 1
+fi
+
+echo "健康检查通过"
+exit 0
+EOF
+    chmod +x /usr/local/bin/health-check.sh && \
+    echo "健康检查脚本创建完成"
+
+# 创建启动脚本
+RUN echo "=== 创建启动脚本 ===" && \
+    cat > /usr/local/bin/start-nginx.sh <<'EOF' && \
+#!/bin/sh
+set -e
+
+echo "=== SSL Certificate Manager Nginx Proxy ==="
+echo "Alpine版本: $(cat /etc/alpine-release)"
+echo "Nginx版本: $(nginx -v 2>&1)"
+echo "时区: $(date)"
+echo "域名: ${DOMAIN_NAME:-localhost}"
+echo "============================================="
+
+# 检查配置文件
+if [ ! -f /etc/nginx/conf.d/ssl-manager.conf ]; then
+    echo "Warning: ssl-manager.conf not found"
+    if [ -f /etc/nginx/conf.d/ssl-manager.conf.template ]; then
+        echo "使用模板生成配置文件..."
+        envsubst '$DOMAIN_NAME' < /etc/nginx/conf.d/ssl-manager.conf.template > /etc/nginx/conf.d/ssl-manager.conf
+    else
+        echo "创建默认配置..."
+        cat > /etc/nginx/conf.d/default.conf <<'CONF'
+server {
+    listen 80;
+    server_name localhost;
+    
+    location / {
+        return 200 "Nginx Proxy Ready\n";
+        add_header Content-Type text/plain;
+    }
+    
+    location /health {
+        return 200 "OK\n";
+        add_header Content-Type text/plain;
+    }
+}
+CONF
+    fi
+fi
+
+# 测试nginx配置
+echo "测试nginx配置..."
+nginx -t
+
+# 启动nginx
+echo "启动nginx..."
+exec nginx -g "daemon off;"
+EOF
+    chmod +x /usr/local/bin/start-nginx.sh && \
+    echo "启动脚本创建完成"
+
+# 清理APK缓存
+RUN echo "=== 清理APK缓存 ===" && \
+    rm -rf /var/cache/apk/* && \
+    rm -rf /tmp/* && \
+    echo "缓存清理完成"
+
+# 切换到非root用户
+USER nginx-proxy
+
+# 暴露端口
+EXPOSE 80 443
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD /usr/local/bin/health-check.sh
+
+# 启动命令
+CMD ["/usr/local/bin/start-nginx.sh"]
+
+# 标签信息
+LABEL maintainer="SSL Certificate Manager Team" \
+      version="1.0.0" \
+      description="SSL Certificate Manager Nginx Reverse Proxy (Alpine Optimized)" \
+      org.opencontainers.image.source="https://github.com/lijh1983/ssl_cert_manager_delivery" \
+      alpine.mirrors="aliyun,ustc,tuna" \
+      build.optimization="alpine-fast"

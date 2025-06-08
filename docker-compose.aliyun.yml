@@ -212,12 +212,13 @@ services:
   nginx-proxy:
     build:
       context: ./nginx
-      dockerfile: Dockerfile.proxy
+      dockerfile: Dockerfile.proxy.alpine
       args:
         - BUILDKIT_INLINE_CACHE=1
       cache_from:
         - nginx:alpine
         - nginx:1.24-alpine
+        - ssl-manager-nginx-proxy:latest
     image: ssl-manager-nginx-proxy:latest
     container_name: ssl-manager-nginx-proxy
     restart: unless-stopped

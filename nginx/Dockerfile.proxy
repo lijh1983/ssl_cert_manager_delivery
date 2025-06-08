@@ -2,13 +2,36 @@
 # 使用官方Docker Hub镜像作为主要选择，Aliyun镜像作为备选
 FROM nginx:1.24-alpine
 
-# 安装必要工具
-RUN apk add --no-cache \
-    curl \
-    tzdata \
-    && cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
-    && echo "Asia/Shanghai" > /etc/timezone \
-    && apk del tzdata
+# 配置阿里云Alpine镜像源（大幅提升包安装速度）
+RUN echo "=== 配置阿里云Alpine镜像源 ===" && \
+    # 备份原始配置
+    cp /etc/apk/repositories /etc/apk/repositories.backup && \
+    # 检测Alpine版本
+    ALPINE_VERSION=$(cat /etc/alpine-release) && \
+    echo "检测到Alpine版本: $ALPINE_VERSION" && \
+    # 配置阿里云镜像源
+    echo "https://mirrors.aliyun.com/alpine/$ALPINE_VERSION/main" > /etc/apk/repositories && \
+    echo "https://mirrors.aliyun.com/alpine/$ALPINE_VERSION/community" >> /etc/apk/repositories && \
+    echo "阿里云Alpine镜像源配置完成" && \
+    # 更新包索引
+    apk update && \
+    echo "包索引更新完成"
+
+# 安装必要工具（使用阿里云镜像源，速度大幅提升）
+RUN echo "=== 安装系统工具 ===" && \
+    apk add --no-cache \
+        curl \
+        wget \
+        tzdata \
+        openssl \
+        ca-certificates \
+    && echo "系统工具安装完成" && \
+    # 设置时区
+    cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+    echo "Asia/Shanghai" > /etc/timezone && \
+    # 清理tzdata（节省空间）
+    apk del tzdata && \
+    echo "时区配置完成"
 
 # 创建nginx用户
 RUN addgroup -g 1001 -S nginx-proxy && \

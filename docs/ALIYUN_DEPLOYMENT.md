@@ -296,6 +296,211 @@ EOF
 pip config list
 ```
 
+#### Alpine Linux镜像源配置
+
+针对使用Alpine Linux基础镜像的容器（如nginx、redis等），配置阿里云镜像源可以大幅提升包安装速度：
+
+```bash
+# 创建Alpine镜像源优化脚本
+cat > optimize_alpine_sources.sh <<'EOF'
+#!/bin/bash
+# Alpine Linux镜像源优化脚本
+
+set -e
+
+# 颜色定义
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+log_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+# 检测Alpine版本
+detect_alpine_version() {
+    if [ -f /etc/alpine-release ]; then
+        cat /etc/alpine-release
+    else
+        echo "v3.18"  # 默认版本
+    fi
+}
+
+# 测试镜像源速度
+test_mirror_speed() {
+    local mirror=$1
+    local version=$2
+
+    log_info "测试镜像源: $mirror"
+
+    local start_time=$(date +%s%N)
+    if timeout 10 wget -q --spider "https://$mirror/alpine/$version/main/x86_64/APKINDEX.tar.gz" 2>/dev/null; then
+        local end_time=$(date +%s%N)
+        local duration=$(( (end_time - start_time) / 1000000 ))
+        log_success "$mirror 响应时间: ${duration}ms"
+        echo $duration
+    else
+        log_warning "$mirror 连接失败"
+        echo 9999
+    fi
+}
+
+# 选择最快的镜像源
+select_fastest_mirror() {
+    local version=$(detect_alpine_version)
+    log_info "检测到Alpine版本: $version"
+
+    # 候选镜像源
+    local mirrors=(
+        "mirrors.aliyun.com"
+        "mirrors.ustc.edu.cn"
+        "mirrors.tuna.tsinghua.edu.cn"
+        "dl-cdn.alpinelinux.org"
+    )
+
+    local fastest_mirror=""
+    local fastest_time=9999
+
+    for mirror in "${mirrors[@]}"; do
+        local time=$(test_mirror_speed "$mirror" "$version")
+        if [ "$time" -lt "$fastest_time" ]; then
+            fastest_time=$time
+            fastest_mirror=$mirror
+        fi
+    done
+
+    if [ -n "$fastest_mirror" ]; then
+        log_success "选择最快镜像源: $fastest_mirror (${fastest_time}ms)"
+        echo "$fastest_mirror"
+    else
+        log_warning "所有镜像源测试失败，使用默认源"
+        echo "dl-cdn.alpinelinux.org"
+    fi
+}
+
+# 配置Alpine镜像源
+configure_alpine_sources() {
+    local mirror=${1:-$(select_fastest_mirror)}
+    local version=$(detect_alpine_version)
+
+    log_info "配置Alpine镜像源: $mirror"
+
+    # 备份原始配置
+    if [ -f /etc/apk/repositories ]; then
+        cp /etc/apk/repositories /etc/apk/repositories.backup
+    fi
+
+    # 配置新的镜像源
+    cat > /etc/apk/repositories <<EOF
+https://$mirror/alpine/$version/main
+https://$mirror/alpine/$version/community
+EOF
+
+    log_success "Alpine镜像源配置完成"
+
+    # 更新包索引
+    log_info "更新包索引..."
+    if apk update; then
+        log_success "包索引更新成功"
+    else
+        log_warning "包索引更新失败，恢复备份"
+        if [ -f /etc/apk/repositories.backup ]; then
+            mv /etc/apk/repositories.backup /etc/apk/repositories
+        fi
+        return 1
+    fi
+}
+
+# 主函数
+main() {
+    echo "🔧 Alpine Linux镜像源优化工具"
+    echo "==============================="
+
+    if [ ! -f /etc/alpine-release ]; then
+        log_warning "当前系统不是Alpine Linux"
+        exit 1
+    fi
+
+    configure_alpine_sources "$1"
+
+    echo
+    log_success "🎉 Alpine镜像源优化完成！"
+    echo "现在可以使用 'apk add' 命令快速安装包"
+}
+
+# 执行主函数
+main "$@"
+EOF
+
+chmod +x optimize_alpine_sources.sh
+```
+
+**手动配置Alpine镜像源：**
+
+```bash
+# 方法1: 使用sed命令一键替换（推荐）
+sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+
+# 方法2: 直接编辑配置文件
+cat > /etc/apk/repositories <<EOF
+https://mirrors.aliyun.com/alpine/v3.18/main
+https://mirrors.aliyun.com/alpine/v3.18/community
+EOF
+
+# 方法3: 动态检测版本并配置
+ALPINE_VERSION=$(cat /etc/alpine-release)
+cat > /etc/apk/repositories <<EOF
+https://mirrors.aliyun.com/alpine/${ALPINE_VERSION}/main
+https://mirrors.aliyun.com/alpine/${ALPINE_VERSION}/community
+EOF
+```
+
+**多镜像源配置选项：**
+
+```bash
+# 阿里云镜像源（推荐，在阿里云ECS上速度最快）
+https://mirrors.aliyun.com/alpine/v3.18/main
+https://mirrors.aliyun.com/alpine/v3.18/community
+
+# 中科大镜像源（备选方案1）
+https://mirrors.ustc.edu.cn/alpine/v3.18/main
+https://mirrors.ustc.edu.cn/alpine/v3.18/community
+
+# 清华大学镜像源（备选方案2）
+https://mirrors.tuna.tsinghua.edu.cn/alpine/v3.18/main
+https://mirrors.tuna.tsinghua.edu.cn/alpine/v3.18/community
+
+# 官方镜像源（默认，速度较慢）
+https://dl-cdn.alpinelinux.org/alpine/v3.18/main
+https://dl-cdn.alpinelinux.org/alpine/v3.18/community
+```
+
+**验证Alpine镜像源配置：**
+
+```bash
+# 检查当前配置的镜像源
+cat /etc/apk/repositories
+
+# 测试包安装速度
+time apk add --no-cache curl
+
+# 更新包索引并查看速度
+time apk update
+
+# 搜索包测试
+apk search curl
+```
+
 #### 其他软件源配置
 
 ```bash
