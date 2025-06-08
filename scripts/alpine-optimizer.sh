@@ -58,7 +58,10 @@ show_help() {
 # 检测Alpine版本
 detect_alpine_version() {
     if [ -f /etc/alpine-release ]; then
-        cat /etc/alpine-release
+        # 获取主版本号，例如 3.18.12 -> v3.18
+        local full_version=$(cat /etc/alpine-release)
+        local major_minor=$(echo "$full_version" | cut -d'.' -f1,2)
+        echo "v$major_minor"
     else
         echo "v3.18"  # 默认版本
     fi
@@ -192,10 +195,20 @@ test_package_install() {
 # 在容器中测试
 test_in_container() {
     local mirror=$1
-    
+
     log_info "在Alpine容器中测试镜像源优化..."
-    
-    # 创建测试脚本
+
+    # 确定使用的镜像源
+    local selected_mirror
+    if [ "$mirror" = "auto" ]; then
+        selected_mirror="mirrors.aliyun.com"
+    else
+        selected_mirror="$mirror"
+    fi
+
+    log_info "使用镜像源: $selected_mirror"
+
+    # 创建测试脚本（修复变量替换问题）
     cat > test_alpine_in_container.sh <<EOF
 #!/bin/sh
 set -e
@@ -204,47 +217,89 @@ echo "=== Alpine镜像源优化测试 ==="
 echo "Alpine版本: \$(cat /etc/alpine-release)"
 
 # 配置镜像源
-ALPINE_VERSION=\$(cat /etc/alpine-release)
-if [ "$mirror" = "auto" ]; then
-    MIRROR="mirrors.aliyun.com"
-else
-    MIRROR="$mirror"
-fi
+ALPINE_FULL_VERSION=\$(cat /etc/alpine-release)
+ALPINE_VERSION="v\$(echo \$ALPINE_FULL_VERSION | cut -d'.' -f1,2)"
+MIRROR="$selected_mirror"
 
 echo "配置镜像源: \$MIRROR"
+
+# 备份原始配置
+cp /etc/apk/repositories /etc/apk/repositories.backup
+
+# 配置新的镜像源
 echo "https://\$MIRROR/alpine/\$ALPINE_VERSION/main" > /etc/apk/repositories
 echo "https://\$MIRROR/alpine/\$ALPINE_VERSION/community" >> /etc/apk/repositories
+
+echo "当前镜像源配置:"
+cat /etc/apk/repositories
+
+# 测试网络连接
+echo "测试网络连接..."
+if ping -c 1 \$MIRROR > /dev/null 2>&1; then
+    echo "✅ 网络连接正常"
+else
+    echo "⚠️  网络连接可能有问题，但继续测试..."
+fi
 
 # 测试更新和安装
 echo "测试包索引更新..."
 start_time=\$(date +%s)
-apk update > /dev/null 2>&1
-end_time=\$(date +%s)
-update_duration=\$((end_time - start_time))
-echo "包索引更新耗时: \${update_duration}秒"
+if apk update; then
+    end_time=\$(date +%s)
+    update_duration=\$((end_time - start_time))
+    echo "✅ 包索引更新成功，耗时: \${update_duration}秒"
 
-echo "测试包安装..."
-start_time=\$(date +%s)
-apk add --no-cache curl > /dev/null 2>&1
-end_time=\$(date +%s)
-install_duration=\$((end_time - start_time))
-echo "curl包安装耗时: \${install_duration}秒"
-
-echo "✅ Alpine镜像源优化测试完成"
-echo "总耗时: \$((update_duration + install_duration))秒"
+    echo "测试包安装..."
+    start_time=\$(date +%s)
+    if apk add --no-cache curl; then
+        end_time=\$(date +%s)
+        install_duration=\$((end_time - start_time))
+        echo "✅ curl包安装成功，耗时: \${install_duration}秒"
+        echo "✅ Alpine镜像源优化测试完成"
+        echo "总耗时: \$((update_duration + install_duration))秒"
+    else
+        echo "❌ curl包安装失败"
+        exit 1
+    fi
+else
+    echo "❌ 包索引更新失败"
+    echo "尝试恢复原始配置..."
+    mv /etc/apk/repositories.backup /etc/apk/repositories
+    echo "原始配置:"
+    cat /etc/apk/repositories
+    echo "使用原始配置重试..."
+    if apk update; then
+        echo "✅ 原始配置可用"
+    else
+        echo "❌ 原始配置也失败"
+    fi
+    exit 1
+fi
 EOF
-    
+
     chmod +x test_alpine_in_container.sh
-    
-    # 在Alpine容器中运行测试
+
+    # 在Alpine容器中运行测试（增加详细输出）
+    log_info "启动Alpine容器进行测试..."
     if docker run --rm -v "$(pwd)/test_alpine_in_container.sh:/test.sh" alpine:3.18 sh /test.sh; then
         log_success "Alpine容器测试完成"
+        return 0
     else
         log_error "Alpine容器测试失败"
+
+        # 提供故障排除信息
+        echo
+        log_info "故障排除建议:"
+        echo "1. 检查网络连接: ping $selected_mirror"
+        echo "2. 检查Docker网络: docker network ls"
+        echo "3. 尝试手动测试: docker run --rm -it alpine:3.18 sh"
+        echo "4. 检查DNS解析: nslookup $selected_mirror"
+
+        return 1
     fi
-    
+
     # 清理测试脚本
-    rm test_alpine_in_container.sh
+    rm -f test_alpine_in_container.sh
 }
 
 # 测试Alpine构建速度
