@@ -53,18 +53,62 @@ optimize_system_for_aliyun() {
         sudo sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list
         sudo sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list
         sudo apt-get update
-    elif [ -f /etc/yum.repos.d/CentOS-Base.repo ]; then
-        log_info "配置阿里云YUM镜像源..."
+    elif command -v dnf > /dev/null; then
+        log_info "配置阿里云DNF镜像源（RHEL/CentOS 9）..."
+        # 备份原始配置
+        sudo cp /etc/dnf/dnf.conf /etc/dnf/dnf.conf.backup 2>/dev/null || true
+
+        # 配置阿里云镜像源
+        sudo tee /etc/yum.repos.d/aliyun.repo > /dev/null <<EOF
+[aliyun-baseos]
+name=AliyunLinux-BaseOS
+baseurl=https://mirrors.aliyun.com/centos-stream/9-stream/BaseOS/x86_64/os/
+gpgcheck=0
+enabled=1
+
+[aliyun-appstream]
+name=AliyunLinux-AppStream
+baseurl=https://mirrors.aliyun.com/centos-stream/9-stream/AppStream/x86_64/os/
+gpgcheck=0
+enabled=1
+
+[aliyun-extras]
+name=AliyunLinux-Extras
+baseurl=https://mirrors.aliyun.com/centos-stream/9-stream/CRB/x86_64/os/
+gpgcheck=0
+enabled=1
+
+[epel]
+name=Extra Packages for Enterprise Linux 9
+baseurl=https://mirrors.aliyun.com/epel/9/Everything/x86_64/
+gpgcheck=0
+enabled=1
+EOF
+
+        sudo dnf clean all
+        sudo dnf makecache
+    elif command -v yum > /dev/null; then
+        log_info "配置阿里云YUM镜像源（CentOS 7/8）..."
         sudo wget -O /etc/yum.repos.d/CentOS-Base.repo http://mirrors.aliyun.com/repo/Centos-7.repo
         sudo yum clean all
         sudo yum makecache
     fi
-    
-    # 安装必要工具
+
+    # 安装必要工具（兼容不同系统）
     if command -v apt-get > /dev/null; then
-        sudo apt-get install -y curl wget htop iotop nethogs
+        log_info "安装工具包（Ubuntu/Debian）..."
+        sudo apt-get install -y curl wget htop iotop nethogs net-tools
+    elif command -v dnf > /dev/null; then
+        log_info "安装工具包（RHEL/CentOS 9）..."
+        # 启用EPEL仓库以获取更多工具
+        sudo dnf install -y epel-release 2>/dev/null || true
+        sudo dnf install -y curl wget htop iotop net-tools
+        # nethogs在RHEL 9中可能需要从EPEL安装
+        sudo dnf install -y nethogs 2>/dev/null || log_warning "nethogs安装失败，可能需要手动安装"
     elif command -v yum > /dev/null; then
-        sudo yum install -y curl wget htop iotop nethogs
+        log_info "安装工具包（CentOS 7/8）..."
+        sudo yum install -y epel-release
+        sudo yum install -y curl wget htop iotop nethogs net-tools
     fi
     
     log_success "系统配置优化完成"
@@ -248,6 +292,15 @@ start_monitoring() {
     fi
 }
 
+# 启动生产级nginx
+start_nginx() {
+    if [ "$ENABLE_NGINX" = "true" ]; then
+        log_info "启动生产级nginx..."
+        docker-compose --profile production up -d nginx
+        log_success "生产级nginx启动完成"
+    fi
+}
+
 # 健康检查
 health_check() {
     log_info "执行健康检查..."
@@ -317,6 +370,10 @@ main() {
                 ENABLE_MONITORING="true"
                 shift
                 ;;
+            --enable-nginx)
+                ENABLE_NGINX="true"
+                shift
+                ;;
             --skip-build)
                 SKIP_BUILD="true"
                 shift
@@ -328,6 +385,7 @@ main() {
                 echo "  --domain DOMAIN       设置域名"
                 echo "  --email EMAIL         设置ACME邮箱"
                 echo "  --enable-monitoring   启用监控服务"
+                echo "  --enable-nginx        启用生产级nginx"
                 echo "  --skip-build          跳过镜像构建"
                 echo "  --help               显示帮助信息"
                 exit 0
@@ -354,7 +412,8 @@ main() {
     
     start_services
     start_monitoring
-    
+    start_nginx
+
     # 健康检查
     if health_check; then
         show_deployment_info
