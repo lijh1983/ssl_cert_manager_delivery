@@ -13,6 +13,25 @@ ENV PYTHONUNBUFFERED=1 \
 # 设置工作目录
 WORKDIR /app
 
+# 配置阿里云Debian镜像源（解决网络连接问题）
+RUN echo "=== 配置阿里云Debian镜像源 ===" && \
+    # 备份原始sources.list（如果存在）
+    if [ -f /etc/apt/sources.list ]; then cp /etc/apt/sources.list /etc/apt/sources.list.backup; fi && \
+    # 检测Debian版本
+    DEBIAN_CODENAME=$(cat /etc/os-release | grep VERSION_CODENAME | cut -d= -f2 || echo "bookworm") && \
+    echo "检测到Debian版本: $DEBIAN_CODENAME" && \
+    # 配置阿里云镜像源
+    echo "# 阿里云Debian镜像源" > /etc/apt/sources.list && \
+    echo "deb https://mirrors.aliyun.com/debian/ $DEBIAN_CODENAME main non-free-firmware" >> /etc/apt/sources.list && \
+    echo "deb-src https://mirrors.aliyun.com/debian/ $DEBIAN_CODENAME main non-free-firmware" >> /etc/apt/sources.list && \
+    echo "" >> /etc/apt/sources.list && \
+    echo "deb https://mirrors.aliyun.com/debian-security/ $DEBIAN_CODENAME-security main non-free-firmware" >> /etc/apt/sources.list && \
+    echo "deb-src https://mirrors.aliyun.com/debian-security/ $DEBIAN_CODENAME-security main non-free-firmware" >> /etc/apt/sources.list && \
+    echo "" >> /etc/apt/sources.list && \
+    echo "deb https://mirrors.aliyun.com/debian/ $DEBIAN_CODENAME-updates main non-free-firmware" >> /etc/apt/sources.list && \
+    echo "deb-src https://mirrors.aliyun.com/debian/ $DEBIAN_CODENAME-updates main non-free-firmware" >> /etc/apt/sources.list && \
+    echo "阿里云Debian镜像源配置完成"
+
 # 更新系统并安装必要的系统依赖
 RUN echo "=== 更新系统包 ===" && \
     apt-get update && \
@@ -24,13 +43,15 @@ RUN echo "=== 更新系统包 ===" && \
         libssl-dev \
         libffi-dev \
         libpq-dev \
+        ca-certificates \
         && \
     echo "=== 系统包安装完成 ==="
 
 # 配置阿里云pip镜像源
 RUN echo "=== 配置pip镜像源 ===" && \
-    pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && \
-    pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn && \
+    pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
+    pip config set global.trusted-host mirrors.aliyun.com && \
+    pip config set global.timeout 60 && \
     pip config list && \
     echo "=== pip镜像源配置完成 ==="
 
