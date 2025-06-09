@@ -1,94 +1,23 @@
 # 阿里云优化版后端Dockerfile
 # 多阶段构建 - 后端应用
 
-# 阶段1: 基础镜像
-# 使用官方Python镜像配合阿里云镜像加速器
-FROM python:3.10-slim AS base
+# 阶段1: 应用构建
+# 使用预构建的后端基础镜像（包含所有依赖）
+FROM ssl-manager-backend-base:latest AS production
 
-# 设置环境变量
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \
-    PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn
+# 切换回root用户进行系统配置
+USER root
 
-# 配置阿里云软件源（大幅提升包下载速度）
-RUN echo "正在配置阿里云软件源..." && \
-    # 备份原始sources.list
-    cp /etc/apt/sources.list /etc/apt/sources.list.backup 2>/dev/null || true && \
-    # 配置阿里云Debian镜像源
-    echo "deb https://mirrors.aliyun.com/debian/ bookworm main non-free-firmware" > /etc/apt/sources.list && \
-    echo "deb-src https://mirrors.aliyun.com/debian/ bookworm main non-free-firmware" >> /etc/apt/sources.list && \
-    echo "deb https://mirrors.aliyun.com/debian-security/ bookworm-security main non-free-firmware" >> /etc/apt/sources.list && \
-    echo "deb-src https://mirrors.aliyun.com/debian-security/ bookworm-security main non-free-firmware" >> /etc/apt/sources.list && \
-    echo "deb https://mirrors.aliyun.com/debian/ bookworm-updates main non-free-firmware" >> /etc/apt/sources.list && \
-    echo "deb-src https://mirrors.aliyun.com/debian/ bookworm-updates main non-free-firmware" >> /etc/apt/sources.list && \
-    echo "阿里云软件源配置完成"
-
-# 安装系统依赖（使用阿里云镜像源，速度大幅提升）
-RUN echo "开始安装系统依赖..." && \
-    apt-get update && \
-    echo "软件源更新完成，开始安装包..." && \
-    apt-get install -y --no-install-recommends \
-        curl \
-        wget \
-        gcc \
-        g++ \
-        make \
-        libffi-dev \
-        libssl-dev \
-        libpq-dev \
-        pkg-config \
-        netcat-traditional \
-        ca-certificates \
-        build-essential \
-    && echo "系统依赖安装完成，清理缓存..." && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* && \
-    rm -rf /tmp/* && \
-    rm -rf /var/tmp/* && \
-    echo "系统依赖安装和清理完成"
-
-# 阶段2: 依赖安装
-FROM base AS dependencies
-
-# 设置工作目录
+# 设置工作目录（基础镜像中已设置，但为了明确性再次设置）
 WORKDIR /app
-
-# 升级pip并配置镜像源
-RUN pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple
-
-# 复制requirements文件
-COPY requirements.txt .
-
-# 创建优化的requirements文件（添加阿里云镜像源）
-RUN echo "-i https://pypi.tuna.tsinghua.edu.cn/simple" > requirements-aliyun.txt \
-    && echo "--trusted-host pypi.tuna.tsinghua.edu.cn" >> requirements-aliyun.txt \
-    && cat requirements.txt >> requirements-aliyun.txt
-
-# 安装Python依赖（使用阿里云镜像源）
-RUN pip install --no-cache-dir -r requirements-aliyun.txt
-
-# 阶段3: 生产镜像
-FROM base AS production
-
-# 创建应用用户
-RUN groupadd -r appuser && useradd -r -g appuser appuser
-
-# 设置工作目录
-WORKDIR /app
-
-# 从依赖阶段复制已安装的包
-COPY --from=dependencies /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
-COPY --from=dependencies /usr/local/bin /usr/local/bin
 
 # 复制应用代码
 COPY . .
 
-# 创建必要的目录
+# 创建必要的目录并设置权限
 RUN mkdir -p /app/logs /app/data /app/certs /app/backups \
-    && chown -R appuser:appuser /app
+    && chown -R appuser:appuser /app/logs /app/data /app/certs /app/backups \
+    && chmod -R 755 /app/logs /app/data /app/certs /app/backups
 
 # 创建健康检查脚本
 RUN echo '#!/bin/bash' > /usr/local/bin/health-check.sh && \

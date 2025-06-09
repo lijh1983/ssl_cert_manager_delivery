@@ -1,0 +1,88 @@
+# 后端基础镜像 - 仅包含依赖
+# 基于Python 3.10 Slim，预安装所有Python依赖
+
+FROM python:3.10-slim
+
+# 设置环境变量
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    DEBIAN_FRONTEND=noninteractive
+
+# 设置工作目录
+WORKDIR /app
+
+# 更新系统并安装必要的系统依赖
+RUN echo "=== 更新系统包 ===" && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        curl \
+        git \
+        pkg-config \
+        libssl-dev \
+        libffi-dev \
+        libpq-dev \
+        && \
+    echo "=== 系统包安装完成 ==="
+
+# 配置阿里云pip镜像源
+RUN echo "=== 配置pip镜像源 ===" && \
+    pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && \
+    pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn && \
+    pip config list && \
+    echo "=== pip镜像源配置完成 ==="
+
+# 升级pip和安装基础工具
+RUN echo "=== 升级pip ===" && \
+    pip install --upgrade pip setuptools wheel && \
+    pip --version && \
+    echo "=== pip升级完成 ==="
+
+# 复制依赖配置文件
+COPY requirements.txt ./
+
+# 安装Python依赖
+RUN echo "=== 开始安装Python依赖 ===" && \
+    pip install --no-cache-dir -r requirements.txt && \
+    echo "=== Python依赖安装完成 ===" && \
+    pip list
+
+# 创建非root用户
+RUN echo "=== 创建应用用户 ===" && \
+    groupadd -r appuser && \
+    useradd -r -g appuser -d /app -s /sbin/nologin -c "App User" appuser && \
+    echo "=== 用户创建完成 ==="
+
+# 创建必要的目录并设置权限
+RUN mkdir -p /app/logs /app/data /app/certs && \
+    chown -R appuser:appuser /app && \
+    chmod -R 755 /app
+
+# 清理系统缓存
+RUN echo "=== 清理系统缓存 ===" && \
+    apt-get autoremove -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* && \
+    echo "=== 缓存清理完成 ==="
+
+# 切换到非root用户
+USER appuser
+
+# 验证安装
+RUN echo "=== 验证Python环境 ===" && \
+    python --version && \
+    pip --version && \
+    python -c "import sys; print('Python path:', sys.path)" && \
+    echo "=== 基础镜像构建完成 ==="
+
+# 标签信息
+LABEL maintainer="SSL Certificate Manager Team" \
+      version="1.0.0" \
+      description="Backend Base Image with Dependencies" \
+      stage="base" \
+      component="backend"
+
+# 默认命令
+CMD ["python", "--version"]

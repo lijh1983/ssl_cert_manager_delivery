@@ -6,41 +6,33 @@ FROM nginx:1.24-alpine
 # 设置环境变量
 ENV TZ=Asia/Shanghai
 
-# 智能配置Alpine镜像源（自动选择最快的镜像源）
-RUN echo "=== 智能配置Alpine镜像源 ===" && \
+# 配置可靠的Alpine镜像源
+RUN echo "=== 配置Alpine镜像源 ===" && \
     # 备份原始配置
     cp /etc/apk/repositories /etc/apk/repositories.backup && \
-    # 检测Alpine版本
-    ALPINE_VERSION=$(cat /etc/alpine-release) && \
+    # 检测Alpine版本（从/etc/alpine-release获取主版本号）
+    ALPINE_VERSION=$(cat /etc/alpine-release | cut -d. -f1,2) && \
     echo "检测到Alpine版本: $ALPINE_VERSION" && \
-    # 测试并选择最快的镜像源
-    echo "测试镜像源速度..." && \
-    # 候选镜像源列表
-    MIRRORS="mirrors.aliyun.com mirrors.ustc.edu.cn mirrors.tuna.tsinghua.edu.cn dl-cdn.alpinelinux.org" && \
-    FASTEST_MIRROR="" && \
-    FASTEST_TIME=999 && \
-    for mirror in $MIRRORS; do \
-        echo "测试镜像源: $mirror" && \
-        start_time=$(date +%s) && \
-        if timeout 10 wget -q --spider "https://$mirror/alpine/$ALPINE_VERSION/main/x86_64/APKINDEX.tar.gz" 2>/dev/null; then \
-            end_time=$(date +%s) && \
-            duration=$((end_time - start_time)) && \
-            echo "$mirror 响应时间: ${duration}秒" && \
-            if [ $duration -lt $FASTEST_TIME ]; then \
-                FASTEST_TIME=$duration && \
-                FASTEST_MIRROR=$mirror; \
-            fi; \
-        else \
-            echo "$mirror 连接失败"; \
-        fi; \
-    done && \
-    # 使用最快的镜像源，默认使用阿里云
-    SELECTED_MIRROR=${FASTEST_MIRROR:-mirrors.aliyun.com} && \
-    echo "选择镜像源: $SELECTED_MIRROR (响应时间: ${FASTEST_TIME}秒)" && \
-    # 配置选定的镜像源
-    echo "https://$SELECTED_MIRROR/alpine/$ALPINE_VERSION/main" > /etc/apk/repositories && \
-    echo "https://$SELECTED_MIRROR/alpine/$ALPINE_VERSION/community" >> /etc/apk/repositories && \
-    echo "Alpine镜像源配置完成" && \
+    # 配置多个镜像源作为备选（按优先级排序）
+    cat > /etc/apk/repositories <<EOF
+# 阿里云镜像源（主要）
+https://mirrors.aliyun.com/alpine/v${ALPINE_VERSION}/main
+https://mirrors.aliyun.com/alpine/v${ALPINE_VERSION}/community
+
+# 中科大镜像源（备选1）
+https://mirrors.ustc.edu.cn/alpine/v${ALPINE_VERSION}/main
+https://mirrors.ustc.edu.cn/alpine/v${ALPINE_VERSION}/community
+
+# 清华大学镜像源（备选2）
+https://mirrors.tuna.tsinghua.edu.cn/alpine/v${ALPINE_VERSION}/main
+https://mirrors.tuna.tsinghua.edu.cn/alpine/v${ALPINE_VERSION}/community
+
+# 官方镜像源（最后备选）
+https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}/main
+https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}/community
+EOF
+
+RUN echo "Alpine镜像源配置完成" && \
     # 显示配置结果
     echo "当前配置的镜像源:" && \
     cat /etc/apk/repositories

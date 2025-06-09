@@ -2,32 +2,11 @@
 # 多阶段构建 - 前端应用
 
 # 阶段1: 构建阶段
-# 使用官方Node.js镜像，通过Docker镜像加速器提速
-FROM node:18-alpine AS builder
+# 使用预构建的前端基础镜像（包含所有依赖）
+FROM ssl-manager-frontend-base:latest AS builder
 
-# 设置工作目录
+# 设置工作目录（基础镜像中已设置，但为了明确性再次设置）
 WORKDIR /app
-
-# 配置阿里云npm镜像源和二进制文件镜像
-ENV ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ \
-    SASS_BINARY_SITE=https://npmmirror.com/mirrors/node-sass/ \
-    PHANTOMJS_CDNURL=https://npmmirror.com/mirrors/phantomjs/ \
-    CHROMEDRIVER_CDNURL=https://npmmirror.com/mirrors/chromedriver/ \
-    OPERADRIVER_CDNURL=https://npmmirror.com/mirrors/operadriver/ \
-    GECKODRIVER_CDNURL=https://npmmirror.com/mirrors/geckodriver/ \
-    SELENIUM_CDNURL=https://npmmirror.com/mirrors/selenium/
-
-RUN npm config set registry https://registry.npmmirror.com
-
-# 安装pnpm以提高安装速度
-RUN npm install -g pnpm
-
-# 复制package文件（利用Docker缓存）
-COPY package*.json pnpm-lock.yaml* ./
-
-# 使用pnpm安装依赖（更快的包管理器）
-RUN pnpm config set registry https://registry.npmmirror.com \
-    && pnpm install --no-frozen-lockfile
 
 # 复制源代码
 COPY . .

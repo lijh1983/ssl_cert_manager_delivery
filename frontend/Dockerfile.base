@@ -1,0 +1,70 @@
+# 前端基础镜像 - 仅包含依赖
+# 基于Node.js 18 Alpine，预安装所有npm/pnpm依赖
+
+FROM node:18-alpine
+
+# 设置工作目录
+WORKDIR /app
+
+# 配置阿里云npm镜像源和二进制文件镜像（使用环境变量方式）
+ENV ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ \
+    SASS_BINARY_SITE=https://npmmirror.com/mirrors/node-sass/ \
+    PHANTOMJS_CDNURL=https://npmmirror.com/mirrors/phantomjs/ \
+    CHROMEDRIVER_CDNURL=https://npmmirror.com/mirrors/chromedriver/ \
+    OPERADRIVER_CDNURL=https://npmmirror.com/mirrors/operadriver/ \
+    GECKODRIVER_CDNURL=https://npmmirror.com/mirrors/geckodriver/ \
+    SELENIUM_CDNURL=https://npmmirror.com/mirrors/selenium/ \
+    NODE_ENV=production
+
+# 配置npm镜像源
+RUN npm config set registry https://registry.npmmirror.com && \
+    npm config list
+
+# 安装pnpm包管理器
+RUN npm install -g pnpm && \
+    pnpm --version
+
+# 配置pnpm镜像源
+RUN pnpm config set registry https://registry.npmmirror.com && \
+    pnpm config list
+
+# 复制依赖配置文件
+COPY package.json package-lock.json* pnpm-lock.yaml* ./
+
+# 安装依赖（不使用frozen-lockfile，因为我们已经修复了这个问题）
+RUN echo "=== 开始安装前端依赖 ===" && \
+    pnpm install --no-frozen-lockfile && \
+    echo "=== 前端依赖安装完成 ===" && \
+    pnpm list --depth=0
+
+# 清理npm缓存以减小镜像大小
+RUN npm cache clean --force && \
+    pnpm store prune && \
+    rm -rf /tmp/* /var/tmp/* /root/.npm /root/.pnpm-store
+
+# 创建非root用户
+RUN addgroup -g 1001 -S nodeapp && \
+    adduser -S -D -H -u 1001 -h /app -s /sbin/nologin -G nodeapp -g nodeapp nodeapp
+
+# 设置目录权限
+RUN chown -R nodeapp:nodeapp /app
+
+# 切换到非root用户
+USER nodeapp
+
+# 验证安装
+RUN echo "=== 验证依赖安装 ===" && \
+    node --version && \
+    npm --version && \
+    pnpm --version && \
+    echo "=== 基础镜像构建完成 ==="
+
+# 标签信息
+LABEL maintainer="SSL Certificate Manager Team" \
+      version="1.0.0" \
+      description="Frontend Base Image with Dependencies" \
+      stage="base" \
+      component="frontend"
+
+# 默认命令
+CMD ["node", "--version"]
