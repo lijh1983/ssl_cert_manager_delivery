@@ -8,11 +8,16 @@ FROM node:18-alpine AS builder
 # 设置工作目录
 WORKDIR /app
 
-# 配置阿里云npm镜像源
-RUN npm config set registry https://registry.npmmirror.com \
-    && npm config set electron_mirror https://npmmirror.com/mirrors/electron/ \
-    && npm config set sass_binary_site https://npmmirror.com/mirrors/node-sass/ \
-    && npm config set phantomjs_cdnurl https://npmmirror.com/mirrors/phantomjs/
+# 配置阿里云npm镜像源和二进制文件镜像
+ENV ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ \
+    SASS_BINARY_SITE=https://npmmirror.com/mirrors/node-sass/ \
+    PHANTOMJS_CDNURL=https://npmmirror.com/mirrors/phantomjs/ \
+    CHROMEDRIVER_CDNURL=https://npmmirror.com/mirrors/chromedriver/ \
+    OPERADRIVER_CDNURL=https://npmmirror.com/mirrors/operadriver/ \
+    GECKODRIVER_CDNURL=https://npmmirror.com/mirrors/geckodriver/ \
+    SELENIUM_CDNURL=https://npmmirror.com/mirrors/selenium/
+
+RUN npm config set registry https://registry.npmmirror.com
 
 # 安装pnpm以提高安装速度
 RUN npm install -g pnpm
@@ -22,7 +27,7 @@ COPY package*.json pnpm-lock.yaml* ./
 
 # 使用pnpm安装依赖（更快的包管理器）
 RUN pnpm config set registry https://registry.npmmirror.com \
-    && pnpm install --frozen-lockfile --prefer-offline
+    && pnpm install --no-frozen-lockfile
 
 # 复制源代码
 COPY . .
