@@ -112,7 +112,7 @@ RUN echo "=== 创建默认SSL证书 ===" && \
 
 # 创建健康检查脚本
 RUN echo "=== 创建健康检查脚本 ===" && \
-    cat > /usr/local/bin/health-check.sh <<'EOF' && \
+    cat > /usr/local/bin/health-check.sh <<'EOF'
 #!/bin/sh
 # 健康检查脚本
 set -e
@@ -132,12 +132,13 @@ fi
 echo "健康检查通过"
 exit 0
 EOF
-    chmod +x /usr/local/bin/health-check.sh && \
+
+RUN chmod +x /usr/local/bin/health-check.sh && \
     echo "健康检查脚本创建完成"
 
 # 创建启动脚本
 RUN echo "=== 创建启动脚本 ===" && \
-    cat > /usr/local/bin/start-nginx.sh <<'EOF' && \
+    cat > /usr/local/bin/start-nginx.sh <<'EOF'
 #!/bin/sh
 set -e
 
@@ -160,12 +161,12 @@ if [ ! -f /etc/nginx/conf.d/ssl-manager.conf ]; then
 server {
     listen 80;
     server_name localhost;
-    
+
     location / {
         return 200 "Nginx Proxy Ready\n";
         add_header Content-Type text/plain;
     }
-    
+
     location /health {
         return 200 "OK\n";
         add_header Content-Type text/plain;
@@ -183,7 +184,8 @@ nginx -t
 echo "启动nginx..."
 exec nginx -g "daemon off;"
 EOF
-    chmod +x /usr/local/bin/start-nginx.sh && \
+
+RUN chmod +x /usr/local/bin/start-nginx.sh && \
     echo "启动脚本创建完成"
 
 # 清理APK缓存
