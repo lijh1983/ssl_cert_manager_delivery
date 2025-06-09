@@ -31,8 +31,8 @@ test_dockerfile_syntax() {
     log_info "测试Dockerfile语法..."
     
     local dockerfiles=(
-        "backend/Dockerfile.aliyun.fast"
-        "frontend/Dockerfile.aliyun"
+        "backend/Dockerfile"
+        "frontend/Dockerfile"
         "nginx/Dockerfile.proxy.alpine"
     )
     
@@ -102,8 +102,8 @@ test_image_pull() {
 test_backend_build() {
     log_info "测试后端镜像构建..."
     
-    if [ ! -f "backend/Dockerfile.aliyun.fast" ]; then
-        log_error "backend/Dockerfile.aliyun.fast 文件不存在"
+    if [ ! -f "backend/Dockerfile" ]; then
+        log_error "backend/Dockerfile 文件不存在"
         return 1
     fi
     
@@ -136,7 +136,7 @@ EOF
     log_info "开始构建后端镜像..."
     local start_time=$(date +%s)
     
-    if timeout 600 docker build -f backend/Dockerfile.aliyun.fast -t test-ssl-backend ./backend > build_backend.log 2>&1; then
+    if timeout 600 docker build -f backend/Dockerfile -t test-ssl-backend ./backend > build_backend.log 2>&1; then
         local end_time=$(date +%s)
         local duration=$((end_time - start_time))
         log_success "✅ 后端镜像构建成功，耗时: ${duration}秒"

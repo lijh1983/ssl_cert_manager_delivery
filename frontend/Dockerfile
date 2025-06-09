@@ -2,7 +2,8 @@
 # 多阶段构建 - 前端应用
 
 # 阶段1: 构建阶段
-FROM registry.cn-hangzhou.aliyuncs.com/library/node:18-alpine AS builder
+# 使用官方Node.js镜像，通过Docker镜像加速器提速
+FROM node:18-alpine AS builder
 
 # 设置工作目录
 WORKDIR /app
