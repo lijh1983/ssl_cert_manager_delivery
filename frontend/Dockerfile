@@ -37,7 +37,7 @@ ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 RUN pnpm run build
 
 # 阶段2: 生产阶段
-FROM registry.cn-hangzhou.aliyuncs.com/library/nginx:1.24-alpine AS production
+FROM nginx:1.24-alpine AS production
 
 # 安装必要工具
 RUN apk add --no-cache \

@@ -1,5 +1,4 @@
 # 阿里云优化版Docker Compose配置
-version: '3.8'
 
 # 网络配置
 networks:
@@ -63,9 +62,9 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # Redis缓存 - 使用阿里云镜像
+  # Redis缓存 - 使用官方镜像
   redis:
-    image: registry.cn-hangzhou.aliyuncs.com/library/redis:7-alpine
+    image: redis:7-alpine
     container_name: ssl-manager-redis
     restart: unless-stopped
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password}
@@ -176,8 +175,8 @@ services:
         - VITE_API_BASE_URL=${VITE_API_BASE_URL:-/api}
         - BUILDKIT_INLINE_CACHE=1
       cache_from:
-        - registry.cn-hangzhou.aliyuncs.com/library/node:18-alpine
-        - registry.cn-hangzhou.aliyuncs.com/library/nginx:1.24-alpine
+        - node:18-alpine
+        - nginx:1.24-alpine
     image: ssl-manager-frontend:aliyun
     container_name: ssl-manager-frontend
     restart: unless-stopped

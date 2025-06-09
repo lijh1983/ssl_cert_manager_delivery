@@ -1,5 +1,4 @@
 # 开发环境Docker Compose覆盖配置
-version: '3.8'
 
 services:
   # 开发环境数据库配置

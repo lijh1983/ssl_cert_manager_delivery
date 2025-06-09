@@ -1,5 +1,4 @@
 # 生产环境Docker Compose覆盖配置
-version: '3.8'
 
 services:
   # 生产环境数据库配置

@@ -1,10 +1,19 @@
 # SSL证书管理系统 - Git忽略文件配置
 
-# 环境变量和配置文件
+# 环境变量和配置文件（严格保护）
 .env
 .env.local
 .env.*.local
 *.env
+.env.*
+# 敏感配置文件
+config.json
+secrets.json
+credentials.json
+auth.json
+# 数据库连接配置
+database.conf
+db.conf
 
 # 日志文件
 *.log
@@ -24,17 +33,26 @@ Thumbs.db
 .docker/
 docker-compose.override.yml
 
-# SSL证书和密钥文件
+# SSL证书和密钥文件（严格保护）
 *.pem
 *.crt
 *.key
 *.p12
 *.pfx
+*.jks
+*.keystore
 ssl/
 certs/
+*/certs/
+**/certs/
 nginx/ssl/*.crt
 nginx/ssl/*.key
 !nginx/ssl/.gitkeep
+# ACME账户密钥
+account_key_*.pem
+# Let's Encrypt相关
+letsencrypt/
+acme/
 
 # 数据库文件
 *.db
