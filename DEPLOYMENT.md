@@ -425,6 +425,63 @@ docker exec ssl-manager-nginx nginx -t
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml restart nginx
 ```
 
+**Docker镜像拉取超时**
+```bash
+# 错误: Get "https://gcr.io/v2/": net/http: request canceled while waiting for connection
+# 解决方案: 使用国内镜像源或Docker Hub替代
+
+# 检查网络连接
+curl -I --connect-timeout 10 https://gcr.io/v2/
+
+# 使用Docker Hub替代gcr.io镜像
+# 在docker-compose.prod.yml中修改:
+# image: gcr.io/cadvisor/cadvisor:latest
+# 改为:
+# image: google/cadvisor:latest
+
+# 使用阿里云镜像源（如果可用）
+# image: registry.cn-hangzhou.aliyuncs.com/google_containers/prometheus:v2.45.0
+
+# 重新拉取镜像
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml pull
+```
+
+**ACME环境变量未设置警告**
+```bash
+# 警告: The "ACME_EMAIL" variable is not set
+# 解决方案: 在.env文件中添加SSL证书相关配置
+
+# 添加到.env文件
+echo "# Let's Encrypt SSL证书配置" >> .env
+echo "ACME_EMAIL=your-email@example.com" >> .env
+echo "ACME_DIRECTORY_URL=https://acme-v02.api.letsencrypt.org/directory" >> .env
+echo "ACME_AGREE_TOS=true" >> .env
+echo "ACME_CHALLENGE_TYPE=http-01" >> .env
+
+# 测试环境可使用staging URL
+# ACME_DIRECTORY_URL=https://acme-staging-v02.api.letsencrypt.org/directory
+```
+
+**cAdvisor容器监控问题**
+```bash
+# 错误: Failed to create a Container Manager: mountpoint for cpu not found
+# 解决方案: 优化cAdvisor配置或暂时禁用
+
+# 方案1: 优化配置（在docker-compose.prod.yml中）
+volumes:
+  - /sys/fs/cgroup:/sys/fs/cgroup:ro
+command:
+  - '--housekeeping_interval=10s'
+  - '--docker_only=true'
+
+# 方案2: 暂时禁用cAdvisor
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml stop cadvisor
+
+# 检查其他监控服务是否正常
+curl http://localhost:9090/targets  # Prometheus targets
+curl http://localhost:9100/metrics  # Node Exporter metrics
+```
+
 #### 6. 内存不足
 
 ```bash

@@ -192,7 +192,8 @@ services:
 
   # Prometheus监控
   prometheus:
-    image: prom/prometheus:latest
+    # 使用阿里云镜像源提高拉取稳定性
+    image: registry.cn-hangzhou.aliyuncs.com/google_containers/prometheus:v2.45.0
     container_name: ssl-manager-prometheus
     restart: unless-stopped
     command:
@@ -212,6 +213,7 @@ services:
 
   # Grafana可视化
   grafana:
+    # 使用官方镜像，稳定可靠
     image: grafana/grafana:latest
     container_name: ssl-manager-grafana
     restart: unless-stopped
