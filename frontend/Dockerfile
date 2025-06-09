@@ -49,17 +49,33 @@ RUN mkdir -p /var/cache/nginx/client_temp \
     /var/cache/nginx/uwsgi_temp \
     /var/cache/nginx/scgi_temp \
     /var/log/nginx \
-    /var/run \
+    /tmp \
     && chown -R nginx-app:nginx-app /var/cache/nginx \
     && chown -R nginx-app:nginx-app /var/log/nginx \
-    && chown -R nginx-app:nginx-app /var/run \
+    && chown -R nginx-app:nginx-app /tmp \
     && chown -R nginx-app:nginx-app /usr/share/nginx/html \
-    && chmod -R 755 /usr/share/nginx/html
+    && chmod -R 755 /usr/share/nginx/html \
+    && chmod 755 /tmp
 
 # 创建健康检查脚本
 RUN echo '#!/bin/sh' > /usr/local/bin/health-check.sh && \
     echo 'curl -f http://localhost:80/health || exit 1' >> /usr/local/bin/health-check.sh && \
     chmod +x /usr/local/bin/health-check.sh
+
+# 创建启动脚本
+RUN echo '#!/bin/sh' > /usr/local/bin/start-nginx.sh && \
+    echo 'set -e' >> /usr/local/bin/start-nginx.sh && \
+    echo '' >> /usr/local/bin/start-nginx.sh && \
+    echo '# 确保必要目录存在并有正确权限' >> /usr/local/bin/start-nginx.sh && \
+    echo 'mkdir -p /tmp /var/log/nginx /var/cache/nginx' >> /usr/local/bin/start-nginx.sh && \
+    echo 'touch /tmp/nginx.pid' >> /usr/local/bin/start-nginx.sh && \
+    echo '' >> /usr/local/bin/start-nginx.sh && \
+    echo '# 测试nginx配置' >> /usr/local/bin/start-nginx.sh && \
+    echo 'nginx -t' >> /usr/local/bin/start-nginx.sh && \
+    echo '' >> /usr/local/bin/start-nginx.sh && \
+    echo '# 启动nginx' >> /usr/local/bin/start-nginx.sh && \
+    echo 'exec nginx -g "daemon off;"' >> /usr/local/bin/start-nginx.sh && \
+    chmod +x /usr/local/bin/start-nginx.sh
 
 # 切换到非root用户
 USER nginx-app
@@ -72,7 +88,7 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD /usr/local/bin/health-check.sh
 
 # 启动nginx
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["/usr/local/bin/start-nginx.sh"]
 
 # 标签信息
 LABEL maintainer="SSL Certificate Manager Team" \
