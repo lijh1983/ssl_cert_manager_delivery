@@ -1,18 +1,28 @@
+# 阿里云优化版前端Dockerfile
 # 多阶段构建 - 前端应用
+
 # 阶段1: 构建阶段
-FROM node:18-alpine AS builder
+FROM registry.cn-hangzhou.aliyuncs.com/library/node:18-alpine AS builder
 
 # 设置工作目录
 WORKDIR /app
 
-# 设置npm镜像源（可选，提高国内构建速度）
-RUN npm config set registry https://registry.npmmirror.com
+# 配置阿里云npm镜像源
+RUN npm config set registry https://registry.npmmirror.com \
+    && npm config set disturl https://npmmirror.com/dist \
+    && npm config set electron_mirror https://npmmirror.com/mirrors/electron/ \
+    && npm config set sass_binary_site https://npmmirror.com/mirrors/node-sass/ \
+    && npm config set phantomjs_cdnurl https://npmmirror.com/mirrors/phantomjs/
 
-# 复制package文件
-COPY package*.json ./
+# 安装pnpm以提高安装速度
+RUN npm install -g pnpm
 
-# 安装依赖
-RUN npm ci --only=production --silent
+# 复制package文件（利用Docker缓存）
+COPY package*.json pnpm-lock.yaml* ./
+
+# 使用pnpm安装依赖（更快的包管理器）
+RUN pnpm config set registry https://registry.npmmirror.com \
+    && pnpm install --frozen-lockfile --prefer-offline
 
 # 复制源代码
 COPY . .
@@ -23,12 +33,13 @@ ARG VITE_API_BASE_URL=/api
 ENV NODE_ENV=$NODE_ENV
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
-RUN npm run build
+# 构建时优化
+RUN pnpm run build
 
 # 阶段2: 生产阶段
-FROM nginx:1.24-alpine AS production
+FROM registry.cn-hangzhou.aliyuncs.com/library/nginx:1.24-alpine AS production
 
-# 安装必要的工具
+# 安装必要工具
 RUN apk add --no-cache \
     curl \
     tzdata \
@@ -36,7 +47,7 @@ RUN apk add --no-cache \
     && echo "Asia/Shanghai" > /etc/timezone \
     && apk del tzdata
 
-# 创建nginx用户和组
+# 创建nginx用户
 RUN addgroup -g 1001 -S nginx-app && \
     adduser -S -D -H -u 1001 -h /var/cache/nginx -s /sbin/nologin -G nginx-app -g nginx-app nginx-app
 
@@ -47,7 +58,7 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY nginx-default.conf /etc/nginx/conf.d/default.conf
 
-# 创建必要的目录并设置权限
+# 创建必要目录并设置权限
 RUN mkdir -p /var/cache/nginx/client_temp \
     /var/cache/nginx/proxy_temp \
     /var/cache/nginx/fastcgi_temp \
@@ -82,5 +93,5 @@ CMD ["nginx", "-g", "daemon off;"]
 # 标签信息
 LABEL maintainer="SSL Certificate Manager Team" \
       version="1.0.0" \
-      description="SSL Certificate Manager Frontend" \
+      description="SSL Certificate Manager Frontend (Aliyun Optimized)" \
       org.opencontainers.image.source="https://github.com/lijh1983/ssl_cert_manager_delivery"

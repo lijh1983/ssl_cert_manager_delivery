@@ -80,7 +80,7 @@ def mock_acme_client():
 @pytest.fixture
 def mock_notification_manager():
     """模拟通知管理器"""
-    with patch('services.notification_service.NotificationManager') as mock:
+    with patch('services.notification.NotificationManager') as mock:
         instance = Mock()
         instance.send_notification.return_value = {
             'success': True,

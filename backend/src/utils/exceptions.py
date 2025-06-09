@@ -69,6 +69,10 @@ class ErrorCode(Enum):
     ACME_INVALID_DOMAIN = 1309
     ACME_CA_UNAVAILABLE = 1310
 
+    # 安全相关 (14xx)
+    CSRF_TOKEN_MISSING = 1401
+    CSRF_TOKEN_INVALID = 1402
+
 
 class BaseAPIException(Exception):
     """API异常基类"""
@@ -281,4 +285,8 @@ ERROR_MESSAGES = {
     ErrorCode.ACME_TIMEOUT: "ACME请求超时",
     ErrorCode.ACME_INVALID_DOMAIN: "域名格式无效",
     ErrorCode.ACME_CA_UNAVAILABLE: "CA服务不可用",
+
+    # 安全相关
+    ErrorCode.CSRF_TOKEN_MISSING: "CSRF令牌缺失",
+    ErrorCode.CSRF_TOKEN_INVALID: "CSRF令牌无效",
 }
