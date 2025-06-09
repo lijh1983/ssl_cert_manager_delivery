@@ -52,11 +52,12 @@ services:
       timeout: 10s
       retries: 10
       start_period: 30s
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '0.5'
+    # 临时移除资源限制以解决cgroup配置问题
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 1G
+    #       cpus: '0.5'
     logging:
       driver: "json-file"
       options:
@@ -81,11 +82,12 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.25'
+    # 临时移除资源限制以解决cgroup配置问题
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 512M
+    #       cpus: '0.25'
     logging:
       driver: "json-file"
       options:
@@ -154,11 +156,12 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '0.5'
+    # 临时移除资源限制以解决cgroup配置问题
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 1G
+    #       cpus: '0.5'
     logging:
       driver: "json-file"
       options:
@@ -197,11 +200,12 @@ services:
       timeout: 3s
       retries: 3
       start_period: 5s
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.25'
+    # 临时移除资源限制以解决cgroup配置问题
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 256M
+    #       cpus: '0.25'
     logging:
       driver: "json-file"
       options:
@@ -245,14 +249,15 @@ services:
       timeout: 3s
       retries: 3
       start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.25'
-        reservations:
-          memory: 128M
-          cpus: '0.1'
+    # 临时移除资源限制以解决cgroup配置问题
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 256M
+    #       cpus: '0.25'
+    #     reservations:
+    #       memory: 128M
+    #       cpus: '0.1'
     logging:
       driver: "json-file"
       options:
@@ -279,11 +284,12 @@ services:
     networks:
       ssl-manager-network:
         ipv4_address: 172.20.0.50
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.25'
+    # 临时移除资源限制以解决cgroup配置问题
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 512M
+    #       cpus: '0.25'
     profiles:
       - monitoring
 
@@ -311,10 +317,11 @@ services:
         ipv4_address: 172.20.0.51
     depends_on:
       - prometheus
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.25'
+    # 临时移除资源限制以解决cgroup配置问题
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 256M
+    #       cpus: '0.25'
     profiles:
       - monitoring
