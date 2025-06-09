@@ -100,8 +100,7 @@ services:
         - BUILDKIT_INLINE_CACHE=1
       cache_from:
         - python:3.10-slim
-        - python:3.11-slim
-        - ssl-manager-backend:latest
+        - ssl-manager-backend-base:latest
     image: ssl-manager-backend:aliyun
     container_name: ssl-manager-backend
     restart: unless-stopped
@@ -177,6 +176,7 @@ services:
       cache_from:
         - node:18-alpine
         - nginx:1.24-alpine
+        - ssl-manager-frontend-base:latest
     image: ssl-manager-frontend:aliyun
     container_name: ssl-manager-frontend
     restart: unless-stopped
