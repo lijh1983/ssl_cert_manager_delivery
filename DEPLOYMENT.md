@@ -130,12 +130,27 @@ docker build -t ssl-manager-frontend-base:latest -f frontend/Dockerfile.base ./f
 
 #### 步骤5: 启动服务
 
+**开发环境部署:**
 ```bash
 # 启动完整服务（包含监控）
 docker-compose -f docker-compose.aliyun.yml --profile monitoring up -d
 
 # 或仅启动基础服务
 docker-compose -f docker-compose.aliyun.yml up -d
+```
+
+**生产环境部署:**
+```bash
+# 创建必要的目录
+sudo mkdir -p /opt/ssl-manager/{data,logs,certs,backups}
+sudo mkdir -p /opt/ssl-manager/data/{postgres,redis,prometheus,grafana}
+sudo chown -R $USER:$USER /opt/ssl-manager
+
+# 启动生产环境（包含完整监控栈）
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring up -d
+
+# 或仅启动核心服务
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production up -d
 ```
 
 ## ✅ 部署验证
@@ -178,6 +193,29 @@ curl http://ssl.gzyggl.com/api/health
 
 # 查看API文档
 curl http://ssl.gzyggl.com/api/docs
+```
+
+### 生产环境验证
+
+```bash
+# 检查所有服务状态
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring ps
+
+# 验证核心服务健康状态
+curl -f http://localhost/health                    # Nginx健康检查
+curl -f http://localhost/api/health                # 后端API健康检查
+curl -I http://localhost/                          # 前端页面访问
+curl -I http://localhost/prometheus/               # Prometheus监控
+curl -I http://localhost/grafana/                  # Grafana面板
+
+# 验证数据库连接
+docker exec ssl-manager-postgres psql -U ssl_user -d ssl_manager -c "SELECT 1;"
+
+# 验证Redis连接
+docker exec ssl-manager-redis redis-cli ping
+
+# 检查监控指标
+curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {job: .labels.job, health: .health}'
 ```
 
 ## 🔧 服务管理
@@ -308,6 +346,83 @@ docker-compose -f docker-compose.aliyun.yml up -d postgres
 
 # 检查PostgreSQL版本
 docker exec ssl-manager-postgres psql -U ssl_user -d ssl_manager -c "SELECT version();"
+```
+
+#### 6. 生产环境部署常见问题
+
+**网络配置冲突**
+```bash
+# 错误: Pool overlaps with other one on this address space
+# 解决方案: 使用默认网络，移除自定义网络配置
+
+# 检查现有网络
+docker network ls
+
+# 清理冲突网络
+docker network prune -f
+
+# 使用简化的网络配置重新部署
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production up -d
+```
+
+**端口占用冲突**
+```bash
+# 错误: Bind for 0.0.0.0:80 failed: port is already allocated
+# 检查端口占用
+netstat -tlnp | grep :80
+lsof -i :80
+
+# 停止占用端口的服务
+sudo systemctl stop apache2  # 如果是Apache
+sudo systemctl stop nginx    # 如果是系统nginx
+
+# 或者修改配置使用不同端口
+```
+
+**环境变量格式错误**
+```bash
+# 错误: nc: port number invalid: %!s(int=5432)
+# 解决方案: 确保端口号为字符串格式
+
+# 检查.env文件中的端口配置
+grep -E "(PORT|port)" .env
+
+# 确保端口号使用引号
+DB_PORT="5432"
+REDIS_PORT="6379"
+```
+
+**数据库密码认证失败**
+```bash
+# 错误: password authentication failed for user "ssl_user"
+# 解决方案: 重新初始化数据库
+
+# 停止服务
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml down
+
+# 删除数据库数据卷
+docker volume rm workspace_postgres_data
+
+# 重新启动数据库服务
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d postgres
+
+# 等待数据库初始化完成
+sleep 30
+
+# 测试数据库连接
+docker exec ssl-manager-postgres psql -U ssl_user -d ssl_manager -c "SELECT 1;"
+```
+
+**Nginx配置冲突**
+```bash
+# 错误: duplicate default server for 0.0.0.0:80
+# 解决方案: 使用简化的nginx配置
+
+# 检查nginx配置
+docker exec ssl-manager-nginx nginx -t
+
+# 如果配置有误，重新创建容器
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml restart nginx
 ```
 
 #### 6. 内存不足
