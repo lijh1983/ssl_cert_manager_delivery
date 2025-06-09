@@ -1,269 +1,238 @@
-# SSL证书自动化管理系统
+# SSL证书管理器
 
-一个基于Vue.js + Flask的SSL证书自动化管理系统，提供证书申请、续期、部署和监控的完整解决方案。
+一个基于Docker的SSL证书自动化管理系统，专为阿里云ECS环境优化，支持Let's Encrypt证书的自动申请、续期和部署。
 
-## 🚀 功能特性
+## 🚀 快速部署
 
-### 核心功能
-- **证书管理**: 支持单域名、通配符、多域名证书的申请和管理
-- **自动续期**: 智能监控证书过期时间，自动续期即将过期的证书
-- **多CA支持**: 支持Let's Encrypt、ZeroSSL、Buypass等多个CA
-- **服务器管理**: 统一管理多台服务器的证书部署
-- **告警通知**: 邮件通知证书过期、续期失败等事件
+### 一键部署（推荐）
 
-### 技术特性
-- **现代化界面**: 基于Vue 3 + Element Plus的响应式前端
-- **RESTful API**: 标准化的API接口设计
-- **安全认证**: JWT Token认证和权限控制
-- **实时监控**: 服务器状态和证书状态实时监控
-- **操作日志**: 完整的操作审计日志
+```bash
+# 克隆项目
+git clone https://github.com/lijh1983/ssl_cert_manager_delivery.git
+cd ssl_cert_manager_delivery
+
+# 一键部署
+./deploy.sh --quick
+```
+
+### 手动部署
+
+```bash
+# 1. 创建环境配置
+cat > .env <<EOF
+DOMAIN_NAME=ssl.gzyggl.com
+EMAIL=19822088@qq.com
+ENVIRONMENT=production
+DB_NAME=ssl_manager
+DB_USER=ssl_user
+DB_PASSWORD=$(openssl rand -base64 32)
+REDIS_PASSWORD=$(openssl rand -base64 32)
+GRAFANA_PASSWORD=$(openssl rand -base64 16)
+VITE_API_BASE_URL=/api
+ENABLE_METRICS=true
+EOF
+
+# 2. 构建基础镜像
+docker build -t ssl-manager-backend-base:latest -f backend/Dockerfile.base ./backend
+docker build -t ssl-manager-frontend-base:latest -f frontend/Dockerfile.base ./frontend
+
+# 3. 启动完整服务（包含监控）
+docker-compose -f docker-compose.aliyun.yml --profile monitoring up -d
+```
 
 ## 📋 系统要求
 
-### 服务端要求
-- Python 3.8+
-- Node.js 16+
-- SQLite 3 (或其他支持的数据库)
+- **操作系统**: Ubuntu 20.04+ / CentOS 8+ / Debian 11+
+- **Docker**: 20.10+
+- **内存**: 最低2GB，推荐4GB+
+- **磁盘**: 最低10GB可用空间
+- **网络**: 需要访问互联网（已配置阿里云镜像源）
 
-### 客户端要求
-- Linux系统 (Ubuntu 18.04+, CentOS 7+)
-- Nginx 或 Apache Web服务器
-- 具有sudo权限的用户账户
+## 🌐 访问地址
 
-## 🛠️ 快速开始
+部署完成后，可以通过以下地址访问：
 
-### 标准部署
+- **主应用**: http://ssl.gzyggl.com
+- **API文档**: http://ssl.gzyggl.com/api/docs
+- **监控面板**: http://ssl.gzyggl.com/monitoring/
+- **Prometheus**: http://ssl.gzyggl.com:9090
 
-#### 1. 克隆项目
-```bash
-git clone https://github.com/lijh1983/ssl_cert_manager_delivery.git
-cd ssl_cert_manager_delivery
-```
+## 🔑 默认账户
 
-#### 2. 一键部署
-```bash
-# 下载部署脚本
-curl -fsSL https://raw.githubusercontent.com/lijh1983/ssl_cert_manager_delivery/main/scripts/deploy.sh -o deploy.sh
-chmod +x deploy.sh
+- **管理员**: admin / admin123
+- **Grafana**: admin / grafana_admin_123
+- **数据库**: ssl_user / ssl_password_123
 
-# 执行部署（替换为你的域名）
-sudo ./deploy.sh --domain your-domain.com --enable-monitoring
-```
+⚠️ **生产环境请及时修改默认密码**
 
-#### 3. 访问系统
-- 前端地址: http://your-domain.com
-- 后端API: http://your-domain.com:8000
-- 监控面板: http://your-domain.com:3000 (Grafana)
-- 默认账户: admin / admin123
-
-### 🌟 阿里云优化部署（推荐）
-
-如果您使用阿里云ECS，推荐使用优化版部署，**构建时间从100分钟缩短到10-15分钟**：
+## 🛠️ 管理命令
 
 ```bash
-# 1. 克隆项目
-git clone https://github.com/lijh1983/ssl_cert_manager_delivery.git
-cd ssl_cert_manager_delivery
+# 查看服务状态
+docker-compose -f docker-compose.aliyun.yml ps
 
-# 2. 阿里云优化部署
-chmod +x scripts/deploy_aliyun.sh
-sudo ./scripts/deploy_aliyun.sh --domain your-domain.com --enable-monitoring
+# 查看服务日志
+docker-compose -f docker-compose.aliyun.yml logs -f
+
+# 重启服务
+docker-compose -f docker-compose.aliyun.yml restart
+
+# 停止服务
+docker-compose -f docker-compose.aliyun.yml down
+
+# 备份数据库
+docker exec ssl-manager-postgres pg_dump -U ssl_user ssl_manager > backup.sql
 ```
 
-#### 阿里云优化特性
-- ✅ **镜像加速**: 使用阿里云Docker镜像源，下载速度提升50-70%
-- ✅ **软件源优化**: 配置阿里云APT、NPM、PIP镜像源
-- ✅ **并行构建**: 充分利用多核CPU，减少构建时间
-- ✅ **预构建支持**: 支持基础镜像预构建，减少80%重复构建时间
+## 📊 功能特性
 
-📖 **详细阿里云部署指南**: [docs/ALIYUN_DEPLOYMENT.md](docs/ALIYUN_DEPLOYMENT.md)
+- 🔒 **自动SSL证书管理**: Let's Encrypt证书自动申请和续期
+- 🌐 **多域名支持**: 支持单域名、通配符和多域名证书
+- 📊 **实时监控**: Prometheus + Grafana监控面板
+- 🔄 **自动部署**: 证书自动部署到多个服务器
+- 📱 **Web管理界面**: 直观的证书管理界面
+- 🗄️ **PostgreSQL数据库**: 高性能数据存储
+- 🚨 **告警系统**: 证书过期提醒和故障告警
+
+## 🏗️ 系统架构
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Nginx Proxy   │────│    Frontend     │────│     Backend     │
+│   (Port 80/443) │    │   (Vue.js SPA)  │    │  (FastAPI/Flask)│
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │
+         │              ┌─────────────────┐    ┌─────────────────┐
+         │              │   PostgreSQL    │    │      Redis      │
+         │              │   (Database)    │    │     (Cache)     │
+         │              └─────────────────┘    └─────────────────┘
+         │
+┌─────────────────┐    ┌─────────────────┐
+│   Prometheus    │────│     Grafana     │
+│   (Monitoring)  │    │  (Visualization)│
+└─────────────────┘    └─────────────────┘
+```
 
 ## 📁 项目结构
 
 ```
 ssl_cert_manager_delivery/
-├── backend/                 # 后端服务
-│   ├── app.py              # Flask应用入口
-│   ├── models.py           # 数据模型
-│   ├── config.py           # 配置管理
-│   ├── requirements.txt    # Python依赖
-│   └── .env.example        # 环境变量模板
-├── frontend/               # 前端应用
-│   ├── src/                # 源代码
-│   │   ├── views/          # 页面组件
-│   │   ├── components/     # 通用组件
-│   │   ├── api/            # API接口
-│   │   ├── stores/         # 状态管理
-│   │   └── types/          # TypeScript类型
-│   ├── package.json        # 前端依赖
-│   └── vite.config.ts      # 构建配置
-├── client/                 # 客户端脚本
-│   └── client.sh           # 客户端安装脚本
-├── scripts/                # 管理脚本
-│   ├── ssl-manager.sh      # 核心管理脚本
-│   ├── alpine-optimizer.sh # Alpine优化工具
-│   └── setup_nginx_proxy.sh # nginx代理设置
-├── docs/                   # 文档
-│   ├── DEPLOYMENT.md       # 综合部署指南
-│   ├── ALIYUN_DEPLOYMENT.md # 阿里云专用部署指南
-│   ├── PROJECT_STRUCTURE.md # 项目结构说明
-│   ├── api_reference.md    # API参考文档
-│   └── user_manual.md      # 用户手册
-└── tests/                  # 测试用例
-    └── run_tests.sh        # 测试脚本
+├── backend/                    # 后端服务
+│   ├── Dockerfile             # 后端应用镜像
+│   ├── Dockerfile.base        # 后端基础镜像
+│   ├── requirements.txt       # Python依赖
+│   └── src/                   # 源代码
+├── frontend/                  # 前端应用
+│   ├── Dockerfile             # 前端应用镜像
+│   ├── Dockerfile.base        # 前端基础镜像
+│   ├── package.json           # Node.js依赖
+│   └── src/                   # 源代码
+├── database/                  # 数据库配置
+│   └── init/                  # 初始化脚本
+├── nginx/                     # Nginx配置
+├── monitoring/                # 监控配置
+├── scripts/                   # 管理脚本
+│   └── ssl-manager.sh         # 核心管理脚本
+├── tests/                     # 测试用例
+├── deploy.sh                  # 一键部署脚本
+├── docker-compose.aliyun.yml  # Docker Compose配置
+├── DEPLOYMENT.md              # 部署指南
+└── README.md                  # 项目说明
 ```
 
-## 🔧 配置说明
+## 🔧 故障排除
 
-### 后端配置 (backend/.env)
-```bash
-# Flask配置
-FLASK_ENV=production
-SECRET_KEY=your-secret-key
+### 常见问题
 
-# 数据库配置
-DATABASE_URL=sqlite:///ssl_cert_manager.db
+1. **服务启动失败**
+   ```bash
+   # 检查日志
+   docker-compose -f docker-compose.aliyun.yml logs backend
+   
+   # 检查端口占用
+   netstat -tlnp | grep :80
+   netstat -tlnp | grep :443
+   ```
 
-# JWT配置
-JWT_SECRET_KEY=your-jwt-secret
-JWT_ACCESS_TOKEN_EXPIRES=3600
+2. **数据库连接失败**
+   ```bash
+   # 检查PostgreSQL状态
+   docker exec ssl-manager-postgres pg_isready -U ssl_user -d ssl_manager
+   
+   # 重启数据库
+   docker-compose -f docker-compose.aliyun.yml restart postgres
+   ```
 
-# 邮件配置
-SMTP_SERVER=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USERNAME=your-email@gmail.com
-SMTP_PASSWORD=your-app-password
-```
+3. **网络连接问题**
+   ```bash
+   # 测试网络连接
+   docker run --rm alpine:latest wget -O- https://mirrors.aliyun.com
+   
+   # 检查DNS配置
+   cat /etc/resolv.conf
+   ```
 
-### 前端配置 (frontend/vite.config.ts)
-```typescript
-export default defineConfig({
-  server: {
-    proxy: {
-      '/api': {
-        target: 'http://localhost:5000',
-        changeOrigin: true
-      }
-    }
-  }
-})
-```
+### 性能优化
 
-## 📚 API文档
+1. **内存优化**
+   ```bash
+   # 查看内存使用
+   docker stats
+   
+   # 调整worker数量（在.env文件中）
+   BACKEND_WORKERS=1  # 减少内存使用
+   ```
 
-### 认证接口
-- `POST /api/v1/auth/login` - 用户登录
-- `POST /api/v1/auth/logout` - 用户登出
-- `POST /api/v1/auth/refresh` - 刷新Token
+2. **磁盘清理**
+   ```bash
+   # 清理未使用的镜像
+   docker image prune -a
+   
+   # 清理未使用的卷
+   docker volume prune
+   ```
 
-### 服务器管理
-- `GET /api/v1/servers` - 获取服务器列表
-- `POST /api/v1/servers` - 创建服务器
-- `PUT /api/v1/servers/{id}` - 更新服务器
-- `DELETE /api/v1/servers/{id}` - 删除服务器
+## 📖 部署说明
 
-### 证书管理
-- `GET /api/v1/certificates` - 获取证书列表
-- `POST /api/v1/certificates` - 申请证书
-- `PUT /api/v1/certificates/{id}` - 更新证书
-- `POST /api/v1/certificates/{id}/renew` - 续期证书
+### 环境变量配置
 
-详细API文档请参考: [docs/api_reference.md](docs/api_reference.md)
+| 变量名 | 说明 | 默认值 |
+|--------|------|--------|
+| DOMAIN_NAME | 主域名 | ssl.gzyggl.com |
+| EMAIL | 联系邮箱 | 19822088@qq.com |
+| ENVIRONMENT | 运行环境 | production |
+| DB_NAME | 数据库名 | ssl_manager |
+| DB_USER | 数据库用户 | ssl_user |
+| DB_PASSWORD | 数据库密码 | 随机生成 |
 
-## 🚀 部署指南
+### 数据持久化
 
-### 部署选项
+- **PostgreSQL数据**: 保存在Docker卷 `postgres_data`
+- **SSL证书**: 保存在Docker卷 `ssl_certs`
+- **应用日志**: 保存在Docker卷 `app_logs`
+- **监控数据**: 保存在Docker卷 `prometheus_data` 和 `grafana_data`
 
-| 部署方式 | 适用场景 | 部署时间 | 特点 |
-|---------|----------|----------|------|
-| **标准部署** | 通用环境 | 15-30分钟 | 兼容性好，适用于各种云平台 |
-| **阿里云优化** | 阿里云ECS | 10-15分钟 | 专门优化，速度快，推荐使用 |
-| **预构建镜像** | 快速部署 | 3-5分钟 | 最快速度，适合批量部署 |
+### 安全配置
 
-### 开发环境部署
-```bash
-# 使用开发环境配置
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
-```
+- 使用bcrypt哈希存储密码
+- PostgreSQL外键约束确保数据一致性
+- UUID主键避免ID猜测攻击
+- 完整的操作审计日志
 
-### 生产环境部署
-```bash
-# 使用生产环境配置
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-```
+## 🎯 生产环境建议
 
-### 详细部署文档
-- 📖 **综合部署指南**: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
-- 🌟 **阿里云优化部署**: [docs/ALIYUN_DEPLOYMENT.md](docs/ALIYUN_DEPLOYMENT.md)
-- 📋 **项目结构说明**: [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md)
+1. **域名配置**: 确保域名 `ssl.gzyggl.com` 正确解析到服务器
+2. **防火墙**: 开放80和443端口
+3. **SSL证书**: 系统会自动申请和续期Let's Encrypt证书
+4. **备份策略**: 定期备份PostgreSQL数据库和SSL证书
+5. **监控**: 启用Prometheus和Grafana监控
+6. **日志**: 定期清理和归档应用日志
 
-## 🧪 测试
+## 📞 技术支持
 
-### 运行测试
-```bash
-# 后端测试
-cd backend
-python -m pytest
-
-# 前端测试
-cd frontend
-npm run test
-
-# 集成测试
-./tests/run_tests.sh
-```
-
-## 📖 使用说明
-
-### 1. 添加服务器
-1. 登录管理界面
-2. 进入"服务器管理"页面
-3. 点击"添加服务器"
-4. 复制安装命令到目标服务器执行
-
-### 2. 申请证书
-1. 进入"证书管理"页面
-2. 点击"申请证书"
-3. 填写域名和选择服务器
-4. 选择验证方式并提交
-
-### 3. 监控告警
-1. 进入"告警管理"页面
-2. 查看证书过期预警
-3. 处理相关告警事件
-
-详细使用说明请参考: [docs/user_manual.md](docs/user_manual.md)
-
-## 🤝 贡献指南
-
-1. Fork 项目
-2. 创建功能分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 打开 Pull Request
+- **GitHub Issues**: https://github.com/lijh1983/ssl_cert_manager_delivery/issues
+- **邮箱**: 19822088@qq.com
 
 ## 📄 许可证
 
-本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情
-
-## 🆘 支持
-
-如果您遇到问题或有任何疑问，请：
-
-1. 查看 [文档](docs/)
-2. 搜索 [Issues](../../issues)
-3. 创建新的 [Issue](../../issues/new)
-
-## 🔄 更新日志
-
-### v1.0.0 (2025-06-05)
-- ✨ 初始版本发布
-- 🎉 完整的证书管理功能
-- 🔐 用户认证和权限控制
-- 📱 响应式前端界面
-- 🤖 自动化证书续期
-- 📧 邮件告警通知
-
----
-
-**注意**: 请在生产环境中及时修改默认密码并配置相关安全参数。
+MIT License
