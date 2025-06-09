@@ -90,7 +90,10 @@ RUN echo "=== 创建应用目录 ===" && \
 
 # 复制nginx配置
 COPY nginx.conf /etc/nginx/nginx.conf
-COPY conf.d/ /etc/nginx/conf.d/
+# 删除nginx基础镜像的默认配置文件，避免冲突
+RUN rm -f /etc/nginx/conf.d/default.conf
+# 只复制开发环境配置文件
+COPY conf.d/ssl-manager-dev.conf /etc/nginx/conf.d/ssl-manager-dev.conf
 
 # 创建SSL目录和默认证书
 RUN echo "=== 创建默认SSL证书 ===" && \
@@ -142,14 +145,11 @@ echo "域名: ${DOMAIN_NAME:-localhost}"
 echo "============================================="
 
 # 检查配置文件
-if [ ! -f /etc/nginx/conf.d/ssl-manager.conf ]; then
-    echo "Warning: ssl-manager.conf not found"
-    if [ -f /etc/nginx/conf.d/ssl-manager.conf.template ]; then
-        echo "使用模板生成配置文件..."
-        envsubst '$DOMAIN_NAME' < /etc/nginx/conf.d/ssl-manager.conf.template > /etc/nginx/conf.d/ssl-manager.conf
-    else
-        echo "创建默认配置..."
-        cat > /etc/nginx/conf.d/default.conf <<'CONF'
+if [ -f /etc/nginx/conf.d/ssl-manager-dev.conf ]; then
+    echo "使用开发环境配置: ssl-manager-dev.conf"
+else
+    echo "Warning: ssl-manager-dev.conf not found, 创建默认配置..."
+    cat > /etc/nginx/conf.d/default.conf <<'CONF'
 server {
     listen 80;
     server_name localhost;
@@ -165,7 +165,6 @@ server {
     }
 }
 CONF
-    fi
 fi
 
 # 测试nginx配置

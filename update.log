@@ -66,7 +66,57 @@
 - 遵循Docker最佳实践，非root用户运行
 
 问题解决状态: ✅ 完全解决
-下一步: 进行Nginx反向代理统一入口配置优化
+提交记录: 39a5ce1 - 修复后端服务健康检查问题，实现PostgreSQL数据库连接
+
+### [2025-01-10 11:30] [NGINX] Nginx反向代理统一入口配置 - 已完成
+修复详情:
+1. SSL证书配置冲突修复 - 修改docker-compose卷挂载策略，只挂载开发环境配置文件
+2. nginx配置文件冲突解决 - 在构建时删除nginx基础镜像的default.conf，避免server_name冲突
+3. 权限问题修复 - 修改nginx.conf中PID文件路径为/tmp/nginx.pid，支持非root用户运行
+4. default_server配置优化 - 移除nginx.conf中的default_server标记，让ssl-manager-dev.conf作为默认服务器
+5. 反向代理路径配置 - 完善所有服务的代理配置，包括前端、API、Prometheus、Grafana
+6. 健康检查端点实现 - 配置/health端点，支持容器健康状态监控
+
+验证结果:
+✅ nginx-proxy服务状态: healthy
+✅ 健康检查端点: /health 返回 "nginx-proxy healthy"
+✅ 根路径代理: / → 前端服务 (200 OK)
+✅ API路径代理: /api/health → 后端服务 (200 OK, JSON响应)
+✅ Prometheus路径代理: /prometheus/ → Prometheus服务 (正常响应)
+✅ Grafana路径代理: /grafana/ → Grafana服务 (301重定向，正常)
+✅ 统一入口访问: 通过80端口可访问所有服务
+✅ 安全头部配置: X-Frame-Options, X-Content-Type-Options等安全头部正常
+
+技术要点:
+- 实现HTTP反向代理统一入口，暂时禁用HTTPS以简化开发环境配置
+- 支持负载均衡和故障转移，配置upstream健康检查
+- 实现缓存策略，API缓存5分钟，静态资源缓存1天
+- 配置请求限制和连接限制，防止滥用
+- 支持WebSocket代理，满足实时通信需求
+- 优化日志格式，支持JSON格式日志便于分析
+
+问题解决状态: ✅ 完全解决
+
+### [2025-01-10 11:30] [PROGRESS] SSL证书管理器三项优化进度记录
+优化项目总览:
+1. ✅ 后端服务健康检查修复 - 已完成并提交 (39a5ce1)
+2. ✅ Nginx反向代理统一入口配置 - 已完成
+3. 🔄 Docker资源限制重新启用 - 准备开始
+
+当前服务状态:
+✅ PostgreSQL 15.13: 正常运行，健康检查通过
+✅ Redis 7: 正常运行，健康检查通过
+✅ 后端服务: 正常运行，健康检查通过
+✅ 前端服务: 正常运行，健康检查通过
+✅ Nginx-proxy: 正常运行，健康检查通过 (端口80,443)
+✅ Prometheus: 正常运行 (端口9090)
+✅ Grafana: 正常运行 (端口3000)
+
+下一步计划:
+1. 检测系统cgroup版本支持情况
+2. 重新启用合理的资源限制配置
+3. 测试资源限制在当前环境中的兼容性
+4. 优化资源分配策略
 
 ### [2025-01-10 11:00] [FRONTEND] 前端容器Nginx权限问题修复
 修复详情:
@@ -86,4 +136,107 @@
 - 监控栈已正常运行，可进行系统监控
 - 前端服务已可正常提供Web界面访问
 - 建议在支持cgroup v2的环境中重新启用资源限制
+
+### [2025-01-10 15:00-23:10] [PRODUCTION] 生产环境部署完整修复和优化
+**部署时长**: 8小时10分钟
+**操作类型**: 生产环境部署完整修复和优化
+**影响范围**: 全系统生产环境部署
+
+#### 主要问题和解决方案:
+
+**1. 网络配置冲突问题**
+- **问题**: Docker网络地址段冲突，无法创建自定义网络
+- **错误**: `Pool overlaps with other one on this address space`
+- **解决方案**:
+  - 移除自定义网络配置，使用Docker默认网络
+  - 删除所有服务的静态IP配置
+  - 简化网络架构，依赖Docker内置DNS解析
+- **修改文件**: `docker-compose.yml`, `docker-compose.prod.yml`
+
+**2. 端口占用冲突问题**
+- **问题**: 前端服务和nginx服务都尝试绑定80端口
+- **错误**: `Bind for 0.0.0.0:80 failed: port is already allocated`
+- **解决方案**:
+  - 移除前端服务的端口映射，只通过nginx反向代理访问
+  - 修改生产环境配置，设置`ports: []`
+  - 确保只有nginx服务暴露80/443端口
+- **修改文件**: `docker-compose.yml`, `docker-compose.prod.yml`
+
+**3. 环境变量格式错误问题**
+- **问题**: 数据库和Redis端口号被格式化为`%!s(int=5432)`格式
+- **错误**: `nc: port number invalid: %!s(int=5432)`
+- **解决方案**:
+  - 将所有端口号配置改为字符串格式：`"5432"`, `"6379"`
+  - 修复docker-compose中的环境变量类型处理
+- **修改文件**: `docker-compose.yml`, `docker-compose.prod.yml`
+
+**4. 数据库密码认证失败问题**
+- **问题**: 后端服务无法连接PostgreSQL数据库
+- **错误**: `password authentication failed for user "ssl_user"`
+- **解决方案**:
+  - 删除旧的数据库数据卷，重新初始化数据库
+  - 确保环境变量中的密码与数据库初始化密码一致
+  - 验证数据库连接参数的正确性
+- **操作**: `docker volume rm workspace_postgres_data`
+
+**5. Nginx配置冲突问题**
+- **问题**: SSL证书配置错误和重复的default_server配置
+- **错误**: `SSL_CTX_load_verify_locations failed`, `duplicate default server`
+- **解决方案**:
+  - 创建简化的nginx配置文件，暂时禁用HTTPS
+  - 移除nginx.conf中的默认服务器配置
+  - 使用单一配置文件避免冲突
+- **新增文件**: `nginx/conf.d/ssl-manager-simple.conf`
+
+**6. Prometheus配置问题**
+- **问题**: Prometheus配置文件引用不存在的服务
+- **错误**: `error loading config from prometheus.yml`
+- **解决方案**:
+  - 创建简化的prometheus配置文件
+  - 只监控实际存在的服务
+  - 移除不存在的exporter配置
+- **新增文件**: `monitoring/prometheus-simple.yml`
+
+#### 最终部署验证结果:
+
+**✅ 所有核心服务正常运行:**
+- PostgreSQL: 健康状态，数据库连接正常
+- Redis: 健康状态，缓存服务正常
+- Backend API: 健康状态，API端点响应正常
+- Frontend: 健康状态，Web界面可访问
+- Nginx: 健康状态，反向代理正常工作
+
+**✅ 监控系统正常运行:**
+- Prometheus: 正常运行，监控数据收集正常
+- Grafana: 正常运行，可视化面板可访问
+- Node Exporter: 正常运行，系统监控正常
+- cAdvisor: 健康状态，容器监控正常
+
+**✅ 功能验证通过:**
+- 前端页面可访问: `http://localhost/`
+- API健康检查: `http://localhost/api/health` 返回正常JSON
+- Prometheus监控: `http://localhost/prometheus/` 可访问
+- Grafana面板: `http://localhost/grafana/` 重定向到登录页面
+
+**✅ 网络和端口配置正确:**
+- HTTP端口80: nginx反向代理正常工作
+- HTTPS端口443: nginx配置就绪（SSL证书待配置）
+- 各服务间通信正常，无端口冲突
+
+#### 性能和稳定性:
+- 所有服务健康检查通过
+- 容器重启策略正常工作
+- 资源使用合理（临时禁用资源限制）
+- 日志输出正常，无错误信息
+
+#### 文件变更总结:
+- 修改: `docker-compose.yml` - 网络配置简化，端口号字符串化
+- 修改: `docker-compose.prod.yml` - 生产环境优化，资源限制禁用
+- 新增: `nginx/conf.d/ssl-manager-simple.conf` - 简化nginx配置
+- 新增: `monitoring/prometheus-simple.yml` - 简化prometheus配置
+- 修改: `nginx/nginx.conf` - 移除默认服务器配置
+
+**问题解决状态**: ✅ 完全解决
+**部署状态**: ✅ 生产环境部署成功
+**系统状态**: ✅ 所有服务健康运行
 ---

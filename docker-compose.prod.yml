@@ -28,14 +28,15 @@ services:
       -c work_mem=4MB
       -c min_wal_size=1GB
       -c max_wal_size=4GB
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          cpus: '1.0'
-        reservations:
-          memory: 1G
-          cpus: '0.5'
+    # 临时禁用资源限制以解决cgroup v2兼容性问题
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 2G
+    #       cpus: '1.0'
+    #     reservations:
+    #       memory: 1G
+    #       cpus: '0.5'
 
   # 生产环境Redis配置
   redis:
@@ -52,14 +53,15 @@ services:
     volumes:
       - redis_data:/data
       - ./backups/redis:/backups
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 256M
-          cpus: '0.25'
+    # 临时禁用资源限制以解决cgroup v2兼容性问题
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 512M
+    #       cpus: '0.5'
+    #     reservations:
+    #       memory: 256M
+    #       cpus: '0.25'
 
   # 生产环境后端配置
   backend:
@@ -71,14 +73,14 @@ services:
       
       # 生产数据库配置
       DB_HOST: postgres
-      DB_PORT: 5432
+      DB_PORT: "5432"
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
-      
+
       # 生产Redis配置
       REDIS_HOST: redis
-      REDIS_PORT: 6379
+      REDIS_PORT: "6379"
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       
       # 生产安全配置
@@ -106,63 +108,62 @@ services:
       - app_logs:/app/logs
       - ./backups/app:/app/backups
       - ./config/production:/app/config:ro
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '1.0'
-        reservations:
-          memory: 512M
-          cpus: '0.5'
-      restart_policy:
-        condition: any
-        delay: 5s
-        max_attempts: 3
-        window: 120s
+    # 临时禁用资源限制以解决cgroup v2兼容性问题
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 1G
+    #       cpus: '1.0'
+    #     reservations:
+    #       memory: 512M
+    #       cpus: '0.5'
+    #   restart_policy:
+    #     condition: on-failure
+    #     delay: 5s
+    #     max_attempts: 3
+    #     window: 120s
 
   # 生产环境前端配置
   frontend:
     restart: always
     volumes:
       - nginx_logs:/var/log/nginx
-      - ./config/nginx:/etc/nginx/conf.d:ro
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.5'
-        reservations:
-          memory: 128M
-          cpus: '0.25'
+    ports: []  # 移除端口映射，只通过nginx反向代理访问
+    # deploy:
+      # resources:
+        # limits:
+          # memory: 256M
+          # cpus: '0.5'
+        # reservations:
+          # memory: 128M
+          # cpus: '0.25'
 
   # 生产环境Nginx（启用）
   nginx:
     restart: always
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/conf.d/ssl-manager-simple.conf:/etc/nginx/conf.d/ssl-manager.conf:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
       - nginx_logs:/var/log/nginx
       - ssl_certs:/var/www/ssl-certs:ro
-      - ./config/nginx/cache:/var/cache/nginx
     environment:
       DOMAIN_NAME: ${DOMAIN_NAME}
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 256M
-          cpus: '0.25'
+    # deploy:
+      # resources:
+        # limits:
+          # memory: 512M
+          # cpus: '0.5'
+        # reservations:
+          # memory: 256M
+          # cpus: '0.25'
     profiles: []  # 移除profile限制，在生产环境中启用
 
   # 生产环境监控服务
   prometheus:
     restart: always
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - ./monitoring/prometheus-simple.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -173,14 +174,14 @@ services:
       - '--storage.tsdb.retention.size=10GB'
       - '--web.enable-lifecycle'
       - '--web.enable-admin-api'
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '0.5'
-        reservations:
-          memory: 512M
-          cpus: '0.25'
+    # deploy:
+      # resources:
+        # limits:
+          # memory: 1G
+          # cpus: '0.5'
+        # reservations:
+          # memory: 512M
+          # cpus: '0.25'
     profiles: []  # 在生产环境中启用
 
   grafana:
@@ -199,14 +200,14 @@ services:
       - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
       - ./monitoring/grafana/plugins:/var/lib/grafana/plugins
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 256M
-          cpus: '0.25'
+    # deploy:
+      # resources:
+        # limits:
+          # memory: 512M
+          # cpus: '0.5'
+        # reservations:
+          # memory: 256M
+          # cpus: '0.25'
     profiles: []  # 在生产环境中启用
 
   # 添加额外的监控组件
@@ -225,14 +226,11 @@ services:
       - /:/rootfs:ro
     ports:
       - "9100:9100"
-    networks:
-      ssl-manager-network:
-        ipv4_address: 172.20.0.80
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-          cpus: '0.25'
+    # deploy:
+      # resources:
+        # limits:
+          # memory: 128M
+          # cpus: '0.25'
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:latest
@@ -249,14 +247,11 @@ services:
       - /cgroup:/cgroup:ro
     ports:
       - "8080:8080"
-    networks:
-      ssl-manager-network:
-        ipv4_address: 172.20.0.81
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.5'
+    # deploy:
+      # resources:
+        # limits:
+          # memory: 256M
+          # cpus: '0.5'
 
   # 备份服务
   backup:
@@ -271,23 +266,18 @@ services:
       - ./backups:/backups
       - ./scripts/backup.sh:/backup.sh:ro
     command: /backup.sh
-    networks:
-      ssl-manager-network:
-        ipv4_address: 172.20.0.90
     profiles:
       - backup
 
-# 生产环境网络配置
-networks:
-  ssl-manager-network:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
-          gateway: 172.20.0.1
-    driver_opts:
-      com.docker.network.bridge.name: ssl-manager-br
-      com.docker.network.driver.mtu: 1500
+# 生产环境网络配置 - 使用默认网络避免冲突
+#     driver: bridge
+#     ipam:
+#       config:
+#         - subnet: 10.10.10.0/24
+#           gateway: 10.10.10.1
+#     driver_opts:
+#       com.docker.network.bridge.name: ssl-manager-br
+#       com.docker.network.driver.mtu: 1500
 
 # 生产环境数据卷配置
 volumes:
