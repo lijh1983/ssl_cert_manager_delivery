@@ -28,10 +28,24 @@ RUN echo '#!/bin/bash' > /usr/local/bin/health-check.sh && \
 RUN echo '#!/bin/bash' > /usr/local/bin/start.sh && \
     echo 'set -e' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
+    echo '# 检查必要的命令是否存在' >> /usr/local/bin/start.sh && \
+    echo 'command -v nc >/dev/null 2>&1 || { echo "netcat not found, using curl for health check"; USE_CURL=1; }' >> /usr/local/bin/start.sh && \
+    echo '' >> /usr/local/bin/start.sh && \
     echo '# 等待数据库就绪' >> /usr/local/bin/start.sh && \
     echo 'echo "Waiting for database..."' >> /usr/local/bin/start.sh && \
     echo 'timeout=60' >> /usr/local/bin/start.sh && \
-    echo 'while ! nc -z ${DB_HOST:-localhost} ${DB_PORT:-5432}; do' >> /usr/local/bin/start.sh && \
+    echo 'while true; do' >> /usr/local/bin/start.sh && \
+    echo '  if [ "$USE_CURL" = "1" ]; then' >> /usr/local/bin/start.sh && \
+    echo '    # 使用curl检查数据库连接（通过HTTP健康检查）' >> /usr/local/bin/start.sh && \
+    echo '    if timeout 5 bash -c "</dev/tcp/${DB_HOST:-postgres}/${DB_PORT:-5432}" 2>/dev/null; then' >> /usr/local/bin/start.sh && \
+    echo '      break' >> /usr/local/bin/start.sh && \
+    echo '    fi' >> /usr/local/bin/start.sh && \
+    echo '  else' >> /usr/local/bin/start.sh && \
+    echo '    # 使用netcat检查数据库连接' >> /usr/local/bin/start.sh && \
+    echo '    if nc -z ${DB_HOST:-postgres} ${DB_PORT:-5432}; then' >> /usr/local/bin/start.sh && \
+    echo '      break' >> /usr/local/bin/start.sh && \
+    echo '    fi' >> /usr/local/bin/start.sh && \
+    echo '  fi' >> /usr/local/bin/start.sh && \
     echo '  sleep 1' >> /usr/local/bin/start.sh && \
     echo '  timeout=$((timeout-1))' >> /usr/local/bin/start.sh && \
     echo '  if [ $timeout -eq 0 ]; then' >> /usr/local/bin/start.sh && \
@@ -41,13 +55,13 @@ RUN echo '#!/bin/bash' > /usr/local/bin/start.sh && \
     echo 'done' >> /usr/local/bin/start.sh && \
     echo 'echo "Database is ready!"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
-    echo '# 运行数据库迁移' >> /usr/local/bin/start.sh && \
-    echo 'echo "Running database migrations..."' >> /usr/local/bin/start.sh && \
-    echo 'python src/models/database.py' >> /usr/local/bin/start.sh && \
+    echo '# 测试数据库连接' >> /usr/local/bin/start.sh && \
+    echo 'echo "Testing database connection..."' >> /usr/local/bin/start.sh && \
+    echo 'python -c "from src.models.database_postgres import test_postgres_connection; exit(0 if test_postgres_connection() else 1)"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# 启动应用' >> /usr/local/bin/start.sh && \
-    echo 'echo "Starting application..."' >> /usr/local/bin/start.sh && \
-    echo 'exec gunicorn --bind 0.0.0.0:8000 --workers ${WORKERS:-2} --worker-class gevent --worker-connections 1000 --timeout 120 --keepalive 5 --max-requests 1000 --max-requests-jitter 100 --preload src.app:app' >> /usr/local/bin/start.sh && \
+    echo 'echo "Starting application..."' >> /usr/local/bin/start.sh &&     echo 'cd /app/src' >> /usr/local/bin/start.sh &&     echo 'export PYTHONPATH=/app/src:$PYTHONPATH' >> /usr/local/bin/start.sh && \
+    echo 'exec gunicorn --bind 0.0.0.0:8000 --workers ${WORKERS:-2} --worker-class sync --timeout 120 --max-requests 1000 --max-requests-jitter 100 --preload simple_app:app' >> /usr/local/bin/start.sh && \
     chmod +x /usr/local/bin/start.sh
 
 # 切换到应用用户

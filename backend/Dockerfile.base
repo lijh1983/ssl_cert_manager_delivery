@@ -39,6 +39,8 @@ RUN echo "=== 更新系统包 ===" && \
     apt-get install -y --no-install-recommends \
         build-essential \
         curl \
+        wget \
+        netcat-openbsd \
         git \
         pkg-config \
         libssl-dev \
