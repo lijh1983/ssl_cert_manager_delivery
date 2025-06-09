@@ -64,6 +64,10 @@ show_help() {
     echo "  --alpine-sources   重建前端镜像"
     echo "  --permissions      修复文件权限"
     echo
+    echo "维护选项:"
+    echo "  cleanup [--dry-run]    清理临时文件和维护仓库卫生"
+    echo "  update-log             更新项目更新日志"
+    echo ""
     echo "测试选项 (test):"
     echo "  --build-speed      测试构建速度"
     echo "  --alpine-speed     测试Alpine构建速度"
@@ -74,7 +78,8 @@ show_help() {
     echo "  $0 deploy --domain ssl.gzyggl.com --email admin@gzyggl.com --aliyun --monitoring"
     echo "  $0 verify --all"
     echo "  $0 fix --docker-compose"
-    echo "  $0 test --build-speed"
+    echo "  $0 cleanup --dry-run"
+    echo "  $0 update-log --type FEATURE --desc '添加新功能'"
     echo "  $0 status"
 }
 
@@ -429,6 +434,202 @@ fix_system() {
     log_success "系统修复完成"
 }
 
+# 清理仓库功能
+cleanup_repository() {
+    local dry_run=false
+
+    # 解析清理参数
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --dry-run)
+                dry_run=true
+                shift
+                ;;
+            *)
+                log_error "未知清理参数: $1"
+                return 1
+                ;;
+        esac
+    done
+
+    log_info "开始仓库清理..."
+
+    if [ "$dry_run" = "true" ]; then
+        log_info "干运行模式 - 仅显示将要清理的内容"
+    fi
+
+    local cleaned=0
+
+    # 清理临时脚本
+    log_info "检查临时脚本..."
+    for pattern in "temp_*.sh" "fix-*.sh" "test-*.sh" "diagnose-*.sh"; do
+        local files=$(find . -name "$pattern" -type f 2>/dev/null || true)
+        if [ -n "$files" ]; then
+            if [ "$dry_run" = "true" ]; then
+                echo "将删除临时脚本: $files"
+            else
+                echo "$files" | xargs rm -f
+                log_success "删除临时脚本: $pattern"
+            fi
+            cleaned=$((cleaned + 1))
+        fi
+    done
+
+    # 清理临时文档
+    log_info "检查临时文档..."
+    for pattern in "*_REPORT.md" "*_FIX*.md" "*_VALIDATION*.md" "temp_*.md"; do
+        local files=$(find . -name "$pattern" -type f 2>/dev/null || true)
+        if [ -n "$files" ]; then
+            if [ "$dry_run" = "true" ]; then
+                echo "将删除临时文档: $files"
+            else
+                echo "$files" | xargs rm -f
+                log_success "删除临时文档: $pattern"
+            fi
+            cleaned=$((cleaned + 1))
+        fi
+    done
+
+    # 清理备份文件
+    log_info "检查备份文件..."
+    for pattern in "*.backup" "*.bak" "*.old" "*.tmp"; do
+        local files=$(find . -name "$pattern" -type f 2>/dev/null || true)
+        if [ -n "$files" ]; then
+            if [ "$dry_run" = "true" ]; then
+                echo "将删除备份文件: $files"
+            else
+                echo "$files" | xargs rm -f
+                log_success "删除备份文件: $pattern"
+            fi
+            cleaned=$((cleaned + 1))
+        fi
+    done
+
+    # 清理空目录
+    log_info "检查空目录..."
+    local empty_dirs=$(find . -type d -empty ! -path "./.git*" 2>/dev/null || true)
+    if [ -n "$empty_dirs" ]; then
+        if [ "$dry_run" = "true" ]; then
+            echo "将删除空目录: $empty_dirs"
+        else
+            echo "$empty_dirs" | xargs rmdir 2>/dev/null || true
+            log_success "删除空目录"
+        fi
+        cleaned=$((cleaned + 1))
+    fi
+
+    # Docker系统清理
+    log_info "清理Docker系统..."
+    if [ "$dry_run" = "true" ]; then
+        echo "将执行: docker system prune -f"
+    else
+        docker system prune -f > /dev/null 2>&1 || true
+        log_success "Docker系统清理完成"
+    fi
+
+    if [ $cleaned -eq 0 ]; then
+        log_success "✓ 仓库已经很干净，没有发现需要清理的文件"
+    else
+        if [ "$dry_run" = "true" ]; then
+            log_info "发现 $cleaned 类文件需要清理"
+        else
+            log_success "✓ 清理了 $cleaned 类文件，仓库现在更干净了"
+        fi
+    fi
+}
+
+# 更新项目日志功能
+update_project_log() {
+    local log_type=""
+    local description=""
+    local impact=""
+    local details=""
+    local test_status=""
+
+    # 解析参数
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --type)
+                log_type="$2"
+                shift 2
+                ;;
+            --desc)
+                description="$2"
+                shift 2
+                ;;
+            --impact)
+                impact="$2"
+                shift 2
+                ;;
+            --details)
+                details="$2"
+                shift 2
+                ;;
+            --test)
+                test_status="$2"
+                shift 2
+                ;;
+            *)
+                log_error "未知参数: $1"
+                return 1
+                ;;
+        esac
+    done
+
+    # 交互式输入
+    if [ -z "$log_type" ]; then
+        echo "请选择更新类型:"
+        echo "1) FEATURE - 新功能"
+        echo "2) BUGFIX - 错误修复"
+        echo "3) CLEANUP - 代码清理"
+        echo "4) DOCKER - Docker相关"
+        echo "5) DATABASE - 数据库相关"
+        echo "6) SECURITY - 安全相关"
+        echo "7) DOCS - 文档更新"
+        read -p "请输入选择 (1-7): " choice
+
+        case $choice in
+            1) log_type="FEATURE" ;;
+            2) log_type="BUGFIX" ;;
+            3) log_type="CLEANUP" ;;
+            4) log_type="DOCKER" ;;
+            5) log_type="DATABASE" ;;
+            6) log_type="SECURITY" ;;
+            7) log_type="DOCS" ;;
+            *) log_error "无效选择"; return 1 ;;
+        esac
+    fi
+
+    if [ -z "$description" ]; then
+        read -p "请输入更新描述: " description
+    fi
+
+    if [ -z "$impact" ]; then
+        read -p "请输入影响范围: " impact
+    fi
+
+    if [ -z "$details" ]; then
+        read -p "请输入变更详情: " details
+    fi
+
+    if [ -z "$test_status" ]; then
+        read -p "请输入测试状态: " test_status
+    fi
+
+    # 写入update.log
+    local timestamp=$(date '+%Y-%m-%d %H:%M')
+    {
+        echo ""
+        echo "### [$timestamp] [$log_type] $description"
+        echo "影响范围: $impact"
+        echo "变更详情: $details"
+        echo "测试状态: $test_status"
+        echo "---"
+    } >> update.log
+
+    log_success "更新日志已添加到 update.log"
+}
+
 # 主函数
 main() {
     echo "🔧 SSL证书自动化管理系统 - 核心管理工具"
@@ -477,8 +678,10 @@ main() {
             docker-compose -f docker-compose.aliyun.yml down
             ;;
         cleanup)
-            log_info "清理系统..."
-            docker system prune -f
+            cleanup_repository "$@"
+            ;;
+        update-log)
+            update_project_log "$@"
             ;;
         help|--help|-h)
             show_help
