@@ -23,13 +23,50 @@ import dns.resolver
 import dns.exception
 from .dns_providers import DNSManager
 
+# 导入新的异常处理
+try:
+    from utils.exceptions import (
+        ErrorCode, ACMEError, CertificateError,
+        BaseAPIException, ValidationError
+    )
+except ImportError:
+    # 兼容性处理，如果新的异常模块不存在，使用旧的
+    class ErrorCode:
+        ACME_CLIENT_ERROR = 1301
+        ACME_NETWORK_ERROR = 1306
+        ACME_TIMEOUT = 1308
+        ACME_INVALID_DOMAIN = 1309
+        ACME_RATE_LIMIT = 1305
+        ACME_ORDER_FAILED = 1304
+        ACME_CHALLENGE_FAILED = 1303
+        ACME_ACCOUNT_ERROR = 1302
+        CERTIFICATE_REQUEST_FAILED = 1205
+
+    class ACMEError(Exception):
+        def __init__(self, error_code, message, acme_details=None):
+            self.error_code = error_code
+            self.message = message
+            self.acme_details = acme_details
+            super().__init__(message)
+
+    class CertificateError(Exception):
+        def __init__(self, error_code, message, domain=None):
+            self.error_code = error_code
+            self.message = message
+            self.domain = domain
+            super().__init__(message)
+
+    class ValidationError(Exception):
+        pass
+
 # 配置日志
 logger = logging.getLogger(__name__)
 
 
-class ACMEClientError(Exception):
-    """ACME客户端异常"""
-    pass
+class ACMEClientError(ACMEError):
+    """ACME客户端异常 - 兼容旧代码"""
+    def __init__(self, message: str, error_code: ErrorCode = ErrorCode.ACME_CLIENT_ERROR):
+        super().__init__(error_code=error_code, message=message)
 
 
 class CertificateAuthority:
@@ -140,21 +177,45 @@ class ACMEClient:
         try:
             # 加载或生成账户私钥
             self.account_key = self._load_or_create_account_key()
-            
+
             # 创建ACME客户端
             net = client.ClientNetwork(self.account_key, user_agent='SSL-Cert-Manager/1.0')
-            directory = client.ClientV2.get_directory(self.directory_url, net)
+
+            try:
+                directory = client.ClientV2.get_directory(self.directory_url, net)
+            except requests.exceptions.ConnectionError as e:
+                logger.error(f"无法连接到ACME服务器: {self.directory_url}")
+                raise ACMEError(
+                    error_code=ErrorCode.ACME_NETWORK_ERROR,
+                    message=f"无法连接到ACME服务器: {self.directory_url}",
+                    acme_details={'directory_url': self.directory_url, 'error': str(e)}
+                )
+            except requests.exceptions.Timeout as e:
+                logger.error(f"连接ACME服务器超时: {self.directory_url}")
+                raise ACMEError(
+                    error_code=ErrorCode.ACME_TIMEOUT,
+                    message=f"连接ACME服务器超时: {self.directory_url}",
+                    acme_details={'directory_url': self.directory_url, 'timeout': True}
+                )
+
             self.client = ClientV2(directory, net=net)
-            
+
             # 注册或获取账户
             self.account = self._register_or_get_account()
-            
+
             logger.info("ACME客户端初始化成功")
             return True
-            
+
+        except ACMEError:
+            # 重新抛出ACME错误
+            raise
         except Exception as e:
             logger.error(f"ACME客户端初始化失败: {e}")
-            raise ACMEClientError(f"初始化失败: {e}")
+            raise ACMEError(
+                error_code=ErrorCode.ACME_CLIENT_ERROR,
+                message=f"ACME客户端初始化失败: {str(e)}",
+                acme_details={'error_type': type(e).__name__}
+            )
     
     def _register_or_get_account(self):
         """注册或获取ACME账户"""
@@ -165,7 +226,7 @@ class ACMEClient:
             )
             logger.info("使用现有ACME账户")
             return account
-            
+
         except Exception:
             # 注册新账户
             try:
@@ -176,10 +237,28 @@ class ACMEClient:
                 account = self.client.new_account(new_account)
                 logger.info("注册新ACME账户成功")
                 return account
-                
+
+            except messages.Error as e:
+                logger.error(f"ACME账户注册失败: {e}")
+                if 'rate limit' in str(e).lower():
+                    raise ACMEError(
+                        error_code=ErrorCode.ACME_RATE_LIMIT,
+                        message="ACME账户注册频率超限",
+                        acme_details={'email': self.email, 'error': str(e)}
+                    )
+                else:
+                    raise ACMEError(
+                        error_code=ErrorCode.ACME_ACCOUNT_ERROR,
+                        message=f"ACME账户注册失败: {str(e)}",
+                        acme_details={'email': self.email, 'error': str(e)}
+                    )
             except Exception as e:
                 logger.error(f"注册ACME账户失败: {e}")
-                raise ACMEClientError(f"账户注册失败: {e}")
+                raise ACMEError(
+                    error_code=ErrorCode.ACME_ACCOUNT_ERROR,
+                    message=f"ACME账户注册失败: {str(e)}",
+                    acme_details={'email': self.email, 'error_type': type(e).__name__}
+                )
     
     def generate_csr(self, domains: List[str], key_size: int = 2048) -> Tuple[bytes, bytes]:
         """
@@ -227,7 +306,32 @@ class ACMEClient:
         )
         
         return csr_pem, key_pem
-    
+
+    def _validate_domain_format(self, domain: str) -> bool:
+        """验证域名格式"""
+        import re
+        if not isinstance(domain, str):
+            return False
+
+        # 基本域名格式验证
+        pattern = r'^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$'
+        if not re.match(pattern, domain):
+            return False
+
+        # 长度检查
+        if len(domain) > 253:
+            return False
+
+        # 通配符域名检查
+        if domain.startswith('*.'):
+            # 通配符只能在最前面
+            if domain.count('*') > 1:
+                return False
+            # 验证通配符后的域名部分
+            return self._validate_domain_format(domain[2:])
+
+        return True
+
     def request_certificate(self, domains: List[str], validation_method: str = 'http') -> Dict[str, Any]:
         """
         申请证书
@@ -240,28 +344,64 @@ class ACMEClient:
             Dict: 证书申请结果
         """
         if not self.client or not self.account:
-            raise ACMEClientError("ACME客户端未初始化")
-        
+            raise ACMEError(
+                error_code=ErrorCode.ACME_CLIENT_ERROR,
+                message="ACME客户端未初始化"
+            )
+
+        # 验证输入参数
+        if not domains:
+            raise ValidationError("域名列表不能为空")
+
+        # 验证域名格式
+        for domain in domains:
+            if not self._validate_domain_format(domain):
+                raise ACMEError(
+                    error_code=ErrorCode.ACME_INVALID_DOMAIN,
+                    message=f"域名格式无效: {domain}",
+                    acme_details={'invalid_domain': domain, 'domains': domains}
+                )
+
         try:
             logger.info(f"开始申请证书: {domains}, 验证方式: {validation_method}")
-            
+
             # 生成CSR和私钥
             csr_pem, key_pem = self.generate_csr(domains)
-            
+
             # 创建订单
-            order = self.client.new_order(csr_pem)
-            logger.info(f"创建订单成功: {order.uri}")
-            
+            try:
+                order = self.client.new_order(csr_pem)
+                logger.info(f"创建订单成功: {order.uri}")
+            except messages.Error as e:
+                if 'rate limit' in str(e).lower():
+                    raise ACMEError(
+                        error_code=ErrorCode.ACME_RATE_LIMIT,
+                        message="证书申请频率超限",
+                        acme_details={'domains': domains, 'error': str(e)}
+                    )
+                else:
+                    raise ACMEError(
+                        error_code=ErrorCode.ACME_ORDER_FAILED,
+                        message=f"创建ACME订单失败: {str(e)}",
+                        acme_details={'domains': domains, 'error': str(e)}
+                    )
+            except requests.exceptions.RequestException as e:
+                raise ACMEError(
+                    error_code=ErrorCode.ACME_NETWORK_ERROR,
+                    message=f"网络请求失败: {str(e)}",
+                    acme_details={'domains': domains, 'error': str(e)}
+                )
+
             # 处理授权验证
             for authorization in order.authorizations:
                 self._process_authorization(authorization, validation_method)
-            
+
             # 等待验证完成
             order = self._wait_for_order_ready(order)
-            
+
             # 完成订单
             order = self.client.finalize_order(order, datetime.now() + timedelta(seconds=90))
-            
+
             # 获取证书
             certificate_pem = order.fullchain_pem
 
@@ -281,14 +421,17 @@ class ACMEClient:
                 'domains': domains,
                 'cert_info': cert_info
             }
-            
+
+        except ACMEError:
+            # 重新抛出ACME错误
+            raise
         except Exception as e:
             logger.error(f"证书申请失败: {e}")
-            return {
-                'success': False,
-                'error': str(e),
-                'domains': domains
-            }
+            raise CertificateError(
+                error_code=ErrorCode.CERTIFICATE_REQUEST_FAILED,
+                message=f"证书申请失败: {str(e)}",
+                domain=domains[0] if domains else None
+            )
     
     def _process_authorization(self, authorization, validation_method: str):
         """处理域名授权验证"""
@@ -405,7 +548,7 @@ class ACMEClient:
     def _wait_for_challenge_completion(self, challenge, timeout: int = 300):
         """等待验证完成"""
         start_time = time.time()
-        
+
         while time.time() - start_time < timeout:
             try:
                 challenge = self.client.poll(challenge)
@@ -413,20 +556,35 @@ class ACMEClient:
                     logger.info("验证成功")
                     return
                 elif challenge.status == messages.STATUS_INVALID:
-                    raise ACMEClientError(f"验证失败: {challenge.error}")
-                
+                    error_detail = str(challenge.error) if challenge.error else "未知错误"
+                    raise ACMEError(
+                        error_code=ErrorCode.ACME_CHALLENGE_FAILED,
+                        message=f"ACME验证失败: {error_detail}",
+                        acme_details={'challenge_error': error_detail}
+                    )
+
                 time.sleep(5)
-                
+
+            except ACMEError:
+                # 重新抛出ACME错误
+                raise
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"验证状态检查网络错误: {e}")
+                time.sleep(5)
             except Exception as e:
                 logger.error(f"验证状态检查失败: {e}")
                 time.sleep(5)
-        
-        raise ACMEClientError("验证超时")
+
+        raise ACMEError(
+            error_code=ErrorCode.ACME_TIMEOUT,
+            message="ACME验证超时",
+            acme_details={'timeout_seconds': timeout}
+        )
     
     def _wait_for_order_ready(self, order, timeout: int = 300):
         """等待订单就绪"""
         start_time = time.time()
-        
+
         while time.time() - start_time < timeout:
             try:
                 order = self.client.poll(order)
@@ -434,15 +592,30 @@ class ACMEClient:
                     logger.info("订单就绪")
                     return order
                 elif order.status == messages.STATUS_INVALID:
-                    raise ACMEClientError(f"订单失败: {order.error}")
-                
+                    error_detail = str(order.error) if order.error else "未知错误"
+                    raise ACMEError(
+                        error_code=ErrorCode.ACME_ORDER_FAILED,
+                        message=f"ACME订单失败: {error_detail}",
+                        acme_details={'order_error': error_detail}
+                    )
+
                 time.sleep(5)
-                
+
+            except ACMEError:
+                # 重新抛出ACME错误
+                raise
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"订单状态检查网络错误: {e}")
+                time.sleep(5)
             except Exception as e:
                 logger.error(f"订单状态检查失败: {e}")
                 time.sleep(5)
-        
-        raise ACMEClientError("订单超时")
+
+        raise ACMEError(
+            error_code=ErrorCode.ACME_TIMEOUT,
+            message="ACME订单超时",
+            acme_details={'timeout_seconds': timeout}
+        )
     
     def _save_certificate(self, domain: str, certificate_pem: str, key_pem: bytes) -> Dict[str, Any]:
         """保存证书和私钥"""

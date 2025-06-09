@@ -22,17 +22,56 @@ from utils.validators import InputValidator, DataSanitizer, validate_request_dat
 from utils.csrf import init_csrf_protection, csrf_protect, require_csrf_token
 from utils.rate_limiter import init_rate_limiter, rate_limit, strict_rate_limit, moderate_rate_limit
 
+# 导入错误处理模块
+from utils.exceptions import (
+    ErrorCode, BaseAPIException, ValidationError,
+    AuthenticationError, AuthorizationError,
+    ResourceNotFoundError, ResourceConflictError,
+    ACMEError, CertificateError
+)
+from utils.error_handler import (
+    handle_api_errors, api_error_handler,
+    validate_json_request, create_error_response
+)
+
+# 导入配置和日志模块
+from utils.config_manager import get_config, get_security_config, get_logging_config
+from utils.logging_config import setup_logging, init_logging_middleware, get_logger
+
 # 导入服务模块
 from services.certificate_service import certificate_service
 from services.alert_manager import alert_manager, AlertRule, AlertType, AlertSeverity
 from services.notification import notification_manager
 
+# 获取应用配置
+app_config = get_config()
+security_config = get_security_config()
+logging_config = get_logging_config()
+
+# 设置日志
+setup_logging(
+    app_name=app_config.app_name.lower().replace(' ', '_'),
+    log_level=logging_config.level,
+    log_file=logging_config.file_path,
+    enable_console=logging_config.console_enabled
+)
+
+# 获取应用日志记录器
+logger = get_logger('app')
+
 # 初始化Flask应用
 app = Flask(__name__)
 
 # 配置
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev_secret_key')
-app.config['JWT_EXPIRATION'] = 3600  # Token有效期1小时
+app.config['SECRET_KEY'] = security_config.secret_key
+app.config['JWT_EXPIRATION'] = security_config.jwt_expiration
+app.config['DEBUG'] = app_config.debug
+
+# 注册错误处理器
+handle_api_errors(app)
+
+# 初始化日志中间件
+init_logging_middleware(app)
 
 # 初始化数据库
 init_db()
@@ -135,45 +174,28 @@ def server_token_required(f):
 # 路由
 @app.route('/api/v1/auth/login', methods=['POST'])
 @strict_rate_limit  # 严格限流：每分钟5次，每小时20次
-@validate_request_data({
-    'username': {
-        'required': True,
-        'type': str,
-        'min_length': 3,
-        'max_length': 30,
-        'validator': InputValidator.validate_username
-    },
-    'password': {
-        'required': True,
-        'type': str,
-        'min_length': 8,
-        'max_length': 128
-    }
-})
-@sanitize_request_data()
+@api_error_handler
+@validate_json_request(required_fields=['username', 'password'])
 def login():
     """用户登录"""
     data = request.get_json()
 
-    # 额外的安全检查
     username = data['username']
     password = data['password']
 
     # 验证用户名格式
     if not InputValidator.validate_username(username):
-        return jsonify({
-            'code': 400,
-            'message': '用户名格式不正确',
-            'data': None
-        }), 400
+        raise ValidationError(
+            "用户名格式不正确",
+            field_errors={'username': '用户名只能包含字母、数字、下划线和连字符，长度3-30个字符'}
+        )
 
     user = User.authenticate(username, password)
     if not user:
-        return jsonify({
-            'code': 401,
-            'message': '用户名或密码错误',
-            'data': None
-        }), 401
+        raise AuthenticationError(
+            error_code=ErrorCode.INVALID_CREDENTIALS,
+            message="用户名或密码错误"
+        )
 
     token = generate_token(user.id)
 
@@ -663,95 +685,70 @@ def get_certificates():
 @login_required
 @moderate_rate_limit
 @csrf_protect
-@validate_request_data({
-    'domain': {
-        'required': True,
-        'type': str,
-        'max_length': 253,
-        'validator': lambda x: InputValidator.validate_domain(x, allow_wildcard=True)
-    },
-    'server_id': {
-        'required': True,
-        'type': int
-    },
-    'type': {
-        'required': False,
-        'type': str,
-        'pattern': r'^(single|wildcard|multi)$'
-    },
-    'ca_type': {
-        'required': False,
-        'type': str,
-        'pattern': r'^(letsencrypt|zerossl|buypass)$'
-    },
-    'validation_method': {
-        'required': False,
-        'type': str,
-        'pattern': r'^(http|dns)$'
-    },
-    'auto_renew': {
-        'required': False,
-        'type': bool
-    }
-})
-@sanitize_request_data()
+@api_error_handler
+@validate_json_request(
+    required_fields=['domain', 'server_id'],
+    optional_fields=['type', 'ca_type', 'validation_method', 'auto_renew']
+)
 def create_certificate():
     """申请证书"""
     data = request.get_json()
 
+    # 验证服务器权限
+    server = Server.get_by_id(data['server_id'])
+    if not server:
+        raise ResourceNotFoundError("服务器", data['server_id'])
+
+    if not g.user.is_admin() and server.user_id != g.user.id:
+        raise AuthorizationError("无权限在此服务器上申请证书")
+
     # 处理域名列表
     domains = []
-    if data.get('type') == 'multi':
+    cert_type = data.get('type', 'single')
+
+    if cert_type == 'multi':
         # 多域名证书，域名用逗号分隔
         domains = [d.strip() for d in data['domain'].split(',')]
+        if len(domains) > 100:  # 限制域名数量
+            raise ValidationError("多域名证书最多支持100个域名")
     else:
         domains = [data['domain']]
 
     # 验证所有域名格式
     for domain in domains:
-        if not InputValidator.validate_domain(domain, allow_wildcard=data.get('type') == 'wildcard'):
-            return jsonify({
-                'code': 400,
-                'message': f'域名格式不正确: {domain}',
-                'data': None
-            }), 400
+        if not InputValidator.validate_domain(domain, allow_wildcard=cert_type == 'wildcard'):
+            raise ValidationError(
+                f'域名格式不正确: {domain}',
+                field_errors={'domain': f'域名 {domain} 格式不正确'}
+            )
 
-    try:
-        # 使用证书服务申请证书
-        result = certificate_service.request_certificate(
-            user_id=g.user.id,
-            domains=domains,
-            server_id=data['server_id'],
-            ca_type=data.get('ca_type', 'letsencrypt'),
-            validation_method=data.get('validation_method', 'http'),
-            auto_renew=data.get('auto_renew', True)
-        )
+    # 使用证书服务申请证书
+    result = certificate_service.request_certificate(
+        user_id=g.user.id,
+        domains=domains,
+        server_id=data['server_id'],
+        ca_type=data.get('ca_type', 'letsencrypt'),
+        validation_method=data.get('validation_method', 'http'),
+        auto_renew=data.get('auto_renew', True)
+    )
 
-        if result['success']:
-            return jsonify({
-                'code': 200,
-                'message': 'success',
-                'data': {
-                    'certificate_id': result['certificate_id'],
-                    'domains': result['domains'],
-                    'expires_at': result['expires_at'],
-                    'message': result['message']
-                }
-            })
-        else:
-            return jsonify({
-                'code': 400,
-                'message': result['error'],
-                'data': None
-            }), 400
-
-    except Exception as e:
-        logger.error(f"证书申请异常: {e}")
+    if result['success']:
         return jsonify({
-            'code': 500,
-            'message': '证书申请失败',
-            'data': None
-        }), 500
+            'code': 200,
+            'message': 'success',
+            'data': {
+                'certificate_id': result['certificate_id'],
+                'domains': result['domains'],
+                'expires_at': result['expires_at'],
+                'message': result['message']
+            }
+        })
+    else:
+        raise CertificateError(
+            error_code=ErrorCode.CERTIFICATE_REQUEST_FAILED,
+            message=result['error'],
+            domain=domains[0] if domains else None
+        )
 
 @app.route('/api/v1/certificates/<int:cert_id>', methods=['GET'])
 @login_required
@@ -1431,7 +1428,7 @@ def test_notification():
             template_name = 'certificate_expiring'
 
         # 发送测试通知
-        result = await notification_manager.send_notification(
+        result = notification_manager.send_notification(
             template_name=template_name,
             context=test_context,
             providers=[data['provider']]
