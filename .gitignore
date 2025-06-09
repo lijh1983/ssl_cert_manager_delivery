@@ -6,6 +6,8 @@
 .env.*.local
 *.env
 .env.*
+# 但允许环境变量模板文件
+!.env.example
 # 敏感配置文件
 config.json
 secrets.json
