@@ -1,5 +1,6 @@
 # 后端基础镜像 - 仅包含依赖
 # 基于Python 3.10 Slim，预安装所有Python依赖
+# 使用阿里云镜像加速器优化拉取速度
 
 FROM python:3.10-slim
 

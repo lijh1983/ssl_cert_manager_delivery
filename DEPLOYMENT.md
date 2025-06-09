@@ -268,7 +268,49 @@ cat /etc/resolv.conf
 curl -I https://mirrors.aliyun.com
 ```
 
-#### 4. 内存不足
+#### 4. Docker镜像拉取权限错误
+
+```bash
+# 检查Docker镜像拉取
+docker pull python:3.10-slim
+
+# 如果出现权限错误，检查网络连接
+ping docker.io
+
+# 配置阿里云Docker镜像加速器
+sudo mkdir -p /etc/docker
+cat > /etc/docker/daemon.json <<EOF
+{
+  "registry-mirrors": [
+    "https://registry.cn-hangzhou.aliyuncs.com",
+    "https://mirror.ccs.tencentyun.com"
+  ]
+}
+EOF
+sudo systemctl restart docker
+
+# 重新拉取镜像
+docker pull python:3.10-slim
+```
+
+#### 5. PostgreSQL版本兼容性问题
+
+```bash
+# 如果遇到PostgreSQL版本不兼容错误
+# FATAL: database files are incompatible with server
+
+# 停止服务并清理数据卷
+docker-compose -f docker-compose.aliyun.yml down
+docker volume rm workspace_postgres_data
+
+# 重新启动服务（会重新初始化数据库）
+docker-compose -f docker-compose.aliyun.yml up -d postgres
+
+# 检查PostgreSQL版本
+docker exec ssl-manager-postgres psql -U ssl_user -d ssl_manager -c "SELECT version();"
+```
+
+#### 6. 内存不足
 
 ```bash
 # 查看内存使用情况

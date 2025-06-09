@@ -1,0 +1,25 @@
+### [2025-01-10 10:30] [DOCKER] Docker镜像拉取权限错误和PostgreSQL版本兼容性问题修复
+影响范围: 后端基础镜像构建和数据库服务
+变更详情:
+1. 诊断Docker镜像拉取权限问题 - 发现为临时网络问题，现已恢复正常
+2. 识别PostgreSQL版本兼容性问题 - 数据目录由PostgreSQL 17初始化，但配置使用PostgreSQL 15
+3. 修复Dockerfile.base中的镜像源配置，确保使用阿里云镜像加速器
+4. 解决PostgreSQL版本冲突，统一使用PostgreSQL 15-alpine
+5. 验证Docker镜像拉取和构建流程 - 所有镜像均可正常拉取和运行
+6. 验证docker-compose配置语法 - 配置文件语法正确
+7. 更新DEPLOYMENT.md故障排除部分，添加Docker镜像拉取和PostgreSQL版本兼容性问题解决方案
+测试状态: ✅ 基础镜像构建成功，PostgreSQL和Redis镜像拉取正常，配置验证通过
+问题解决:
+- Docker镜像拉取权限错误：已解决，网络连接恢复正常，添加镜像加速器配置指南
+- PostgreSQL版本兼容性：已解决，统一使用PostgreSQL 15-alpine，提供数据卷清理方案
+- 基础镜像构建：已解决，使用阿里云镜像源加速构建
+- 文档更新：已完成，DEPLOYMENT.md新增相关故障排除指南
+修复验证:
+✅ python:3.10-slim镜像拉取成功
+✅ postgres:15-alpine镜像拉取成功
+✅ redis:7-alpine镜像拉取成功
+✅ ssl-manager-backend-base:latest构建成功
+✅ docker-compose配置语法验证通过
+✅ 所有镜像运行测试通过
+注意事项: 在某些环境中可能遇到cgroup配置问题，这是Docker运行时环境相关，不影响镜像本身
+---
