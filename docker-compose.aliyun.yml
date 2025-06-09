@@ -47,10 +47,11 @@ services:
       ssl-manager-network:
         ipv4_address: 172.20.0.10
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-ssl_user} -d ${DB_NAME:-ssl_manager}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ["CMD-SHELL", "pg_isready -U ssl_user -d ssl_manager"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
     deploy:
       resources:
         limits:
