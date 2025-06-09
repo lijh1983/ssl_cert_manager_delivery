@@ -111,7 +111,6 @@ pull_base_nginx_image() {
         "nginx:1.24-alpine"
         "nginx:1.22-alpine"
         "nginx:alpine"
-        "registry.cn-hangzhou.aliyuncs.com/acs/nginx:1.24-alpine"
         "dockerproxy.com/library/nginx:1.24-alpine"
     )
 
