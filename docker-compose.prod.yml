@@ -159,83 +159,15 @@ services:
           # cpus: '0.25'
     profiles: []  # 移除profile限制，在生产环境中启用
 
-  # 生产环境监控服务
-  prometheus:
-    restart: always
-    volumes:
-      - ./monitoring/prometheus-simple.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--storage.tsdb.retention.time=30d'
-      - '--storage.tsdb.retention.size=10GB'
-      - '--web.enable-lifecycle'
-      - '--web.enable-admin-api'
-    # deploy:
-      # resources:
-        # limits:
-          # memory: 1G
-          # cpus: '0.5'
-        # reservations:
-          # memory: 512M
-          # cpus: '0.25'
-    profiles: []  # 在生产环境中启用
+  # 系统监控服务已移除 (专注SSL证书管理核心功能)
+  # SSL证书管理系统专注于证书业务监控，不再包含基础设施监控
 
-  grafana:
-    restart: always
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
-      GF_USERS_ALLOW_SIGN_UP: false
-      GF_SECURITY_ALLOW_EMBEDDING: false
-      GF_SECURITY_COOKIE_SECURE: true
-      GF_SECURITY_COOKIE_SAMESITE: strict
-      GF_SERVER_ROOT_URL: https://${DOMAIN_NAME}/grafana/
-      GF_SERVER_SERVE_FROM_SUB_PATH: true
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
-      - ./monitoring/grafana/plugins:/var/lib/grafana/plugins
-    # deploy:
-      # resources:
-        # limits:
-          # memory: 512M
-          # cpus: '0.5'
-        # reservations:
-          # memory: 256M
-          # cpus: '0.25'
-    profiles: []  # 在生产环境中启用
-
-  # 添加额外的监控组件
-  node-exporter:
-    # 使用官方镜像，稳定可靠
-    image: prom/node-exporter:latest
-    container_name: ssl-manager-node-exporter
-    restart: unless-stopped
-    command:
-      - '--path.procfs=/host/proc'
-      - '--path.rootfs=/rootfs'
-      - '--path.sysfs=/host/sys'
-      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
-    volumes:
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /:/rootfs:ro
-    ports:
-      - "9100:9100"
-    # deploy:
-      # resources:
-        # limits:
-          # memory: 128M
-          # cpus: '0.25'
+  # Grafana和Node Exporter已移除 (专注SSL证书管理核心功能)
+  # SSL证书管理系统内置证书监控功能，无需外部监控工具
 
   # cAdvisor容器监控服务已移除
   # 原因: cgroup v2兼容性问题和资源占用考虑
-  # 替代方案: 使用node-exporter和docker stats进行基础监控
+  # 替代方案: 使用SSL证书管理系统内置的证书监控功能
 
   # 备份服务
   backup:
@@ -295,15 +227,6 @@ volumes:
       type: none
       o: bind
       device: /var/log/nginx
-  prometheus_data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: /opt/ssl-manager/data/prometheus
-  grafana_data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: /opt/ssl-manager/data/grafana
+  # 监控数据卷已移除 (专注SSL证书管理核心功能)
+  # prometheus_data: 已移除
+  # grafana_data: 已移除

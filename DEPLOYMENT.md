@@ -87,9 +87,9 @@ sudo firewall-cmd --reload
 80/tcp    0.0.0.0/0    HTTP访问
 443/tcp   0.0.0.0/0    HTTPS访问
 22/tcp    您的IP       SSH管理
-# 8080/tcp  内网         cAdvisor监控 (已移除)
-9090/tcp  内网         Prometheus监控 (可选)
-3000/tcp  内网         Grafana监控 (可选)
+# 系统监控端口已移除 (专注SSL证书管理核心功能)
+# 9090/tcp  内网         Prometheus监控 (已移除)
+# 3000/tcp  内网         Grafana监控 (已移除)
 ```
 
 ## 🚀 部署方法
@@ -235,14 +235,12 @@ VITE_API_BASE_URL=/api
 BACKEND_WORKERS=2
 LOG_LEVEL=INFO
 
-# 监控配置
-GRAFANA_USER=admin
-GRAFANA_PASSWORD=$(openssl rand -base64 16)
-PROMETHEUS_PORT=9090
+# SSL证书管理功能配置 (专注核心业务)
+# 系统监控功能已移除，专注SSL证书管理
 
 # 功能开关
-ENABLE_METRICS=true
-ENABLE_MONITORING=true
+ENABLE_METRICS=false
+ENABLE_MONITORING=false
 
 # Let's Encrypt SSL证书配置 (新增 - 避免环境变量警告)
 ACME_EMAIL=19822088@qq.com
@@ -283,16 +281,15 @@ docker-compose -f docker-compose.aliyun.yml up -d
 
 **5.1 创建数据目录结构**
 ```bash
-# 创建生产环境目录结构
+# 创建生产环境目录结构 (专注SSL证书管理核心功能)
 sudo mkdir -p /opt/ssl-manager/{data,logs,certs,backups}
-sudo mkdir -p /opt/ssl-manager/data/{postgres,redis,prometheus,grafana}
+sudo mkdir -p /opt/ssl-manager/data/{postgres,redis}
 
 # 设置正确的权限 (关键!)
 sudo chown -R $USER:$USER /opt/ssl-manager
 sudo chown -R 70:70 /opt/ssl-manager/data/postgres      # PostgreSQL用户
-sudo chown -R 472:472 /opt/ssl-manager/data/grafana     # Grafana用户
-sudo chown -R 65534:65534 /opt/ssl-manager/data/prometheus  # Prometheus用户
 sudo chown -R 999:999 /opt/ssl-manager/data/redis       # Redis用户
+# 监控数据目录已移除 (专注SSL证书管理)
 
 # 验证目录结构
 ls -la /opt/ssl-manager/
@@ -301,14 +298,11 @@ ls -la /opt/ssl-manager/data/
 
 **5.2 启动生产环境服务**
 ```bash
-# 启动完整生产环境（包含监控栈）
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring up -d
-
-# 或仅启动核心服务（不包含监控）
+# 启动SSL证书管理核心服务
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production up -d
 
 # 查看启动状态
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring ps
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production ps
 ```
 
 **5.3 等待服务启动完成**
@@ -329,8 +323,8 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile produc
 
 **1. 服务状态验证**
 ```bash
-# 检查所有服务状态 (应该有9个服务)
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring ps
+# 检查SSL证书管理核心服务状态 (应该有5个服务)
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production ps
 
 # 预期结果: 所有服务状态为 "healthy" 或 "Up"
 # - ssl-manager-postgres: healthy
@@ -338,10 +332,7 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile produc
 # - ssl-manager-backend: healthy
 # - ssl-manager-frontend: healthy
 # - ssl-manager-nginx: healthy
-# - ssl-manager-prometheus: Up
-# - ssl-manager-grafana: Up
-# - ssl-manager-node-exporter: Up
-# - ssl-manager-cadvisor: 已移除 (cgroup v2兼容性问题)
+# 系统监控服务已移除 (专注SSL证书管理核心功能)
 ```
 
 **2. 核心功能验证**
@@ -367,34 +358,31 @@ docker exec ssl-manager-redis redis-cli ping
 # 预期: "PONG"
 ```
 
-**3. 监控系统验证**
+**3. SSL证书管理功能验证**
 ```bash
-# Prometheus监控面板
-curl -f http://localhost/prometheus/
-# 预期: 重定向到 /graph
+# SSL证书管理系统内置监控功能验证
+# 通过Web界面或API验证以下功能:
 
-# Grafana可视化面板
-curl -I http://localhost/grafana/
-# 预期: HTTP/1.1 302 Found, Location: /grafana/login
+# 主机域名监控
+curl -f http://localhost/api/certificates/domains
+# 预期: 返回域名监控状态
 
-# cAdvisor容器监控 (已移除)
-# 原因: cgroup v2兼容性问题
-# 替代方案: 使用docker stats进行基础容器监控
+# 证书状态检查
+curl -f http://localhost/api/certificates/status
+# 预期: 返回证书状态信息
 
-# Node Exporter系统监控
-curl -f http://localhost:9100/metrics | head -5
-# 预期: 返回系统监控指标
+# 证书有效期管理
+curl -f http://localhost/api/certificates/expiry
+# 预期: 返回证书到期信息
 
-# Prometheus targets状态
-curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {job: .labels.job, health: .health}'
-# 预期: 所有target状态为 "up"
+# 系统监控已移除，专注SSL证书管理核心功能
 ```
 
 **4. 数据持久化验证**
 ```bash
 # 验证数据目录挂载
 ls -la /opt/ssl-manager/data/
-# 预期: 看到 postgres, redis, prometheus, grafana 目录
+# 预期: 看到 postgres, redis 目录 (专注SSL证书管理核心功能)
 
 # 验证数据库数据持久化
 docker exec ssl-manager-postgres psql -U ssl_user -d ssl_manager -c "\dt"
@@ -404,15 +392,14 @@ docker exec ssl-manager-postgres psql -U ssl_user -d ssl_manager -c "\dt"
 ls -la /opt/ssl-manager/data/postgres/ | head -3
 # 预期: 所有者为 70:70 (postgres用户)
 
-ls -la /opt/ssl-manager/data/grafana/ | head -3
-# 预期: 所有者为 472:472 (grafana用户)
+# 监控数据目录已移除 (专注SSL证书管理核心功能)
 ```
 
 **5. 网络和安全验证**
 ```bash
 # 验证端口监听
-netstat -tlnp | grep -E ":80|:443|:9090|:3000"
-# 预期: 看到相应端口被Docker进程监听 (8080端口已移除)
+netstat -tlnp | grep -E ":80|:443"
+# 预期: 看到SSL证书管理核心端口被Docker进程监听
 
 # 验证防火墙配置 (如果启用)
 sudo ufw status

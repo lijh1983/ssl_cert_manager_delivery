@@ -27,7 +27,7 @@ cd ssl_cert_manager_delivery
 
 ```bash
 # 检查服务状态
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring ps
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production ps
 
 # 验证核心功能
 curl http://localhost/health          # Nginx健康检查
@@ -44,15 +44,18 @@ curl -I http://localhost/             # 前端页面
 | 前端页面 | http://localhost/ | SSL证书管理界面 |
 | API接口 | http://localhost/api/ | REST API接口 |
 | API文档 | http://localhost/api/docs | Swagger API文档 |
-| Prometheus | http://localhost/prometheus/ | 监控数据收集 |
-| Grafana | http://localhost/grafana/ | 可视化监控面板 |
-| ~~cAdvisor~~ | ~~http://localhost:8080/~~ | ~~容器监控~~ (已移除) |
 
-### 默认登录信息
+**注**: 系统监控功能已移除，专注SSL证书管理核心业务功能
 
-**Grafana监控面板:**
-- 用户名: admin
-- 密码: 查看 `.env` 文件中的 `GRAFANA_PASSWORD`
+### SSL证书管理功能
+
+**核心功能特性:**
+- ✓ 主机域名监控：监控证书绑定的域名状态
+- ✓ 证书等级检查：DV、OV、EV证书类型识别
+- ✓ 加密方式验证：RSA、ECC等加密算法检查
+- ✓ 端口监控：443、80等端口的证书状态
+- ✓ 证书状态跟踪：有效、过期、即将过期状态
+- ✓ 有效期管理：剩余天数计算和到期提醒
 
 ## 🔧 常用管理命令
 
@@ -60,19 +63,19 @@ curl -I http://localhost/             # 前端页面
 
 ```bash
 # 查看服务状态
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring ps
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production ps
 
 # 查看服务日志
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring logs -f
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production logs -f
 
 # 重启特定服务
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml restart backend
 
 # 停止所有服务
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring down
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production down
 
 # 重新启动所有服务
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring up -d
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production up -d
 ```
 
 ### 数据管理
@@ -88,11 +91,14 @@ docker exec ssl-manager-postgres psql -U ssl_user -d ssl_manager -c "\dt"
 docker exec ssl-manager-redis redis-cli ping
 ```
 
-### 监控检查
+### SSL证书监控检查
 
 ```bash
-# 检查Prometheus targets
-curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {job: .labels.job, health: .health}'
+# 检查SSL证书管理API
+curl -f http://localhost/api/certificates/status
+
+# 检查证书到期情况
+curl -f http://localhost/api/certificates/expiry
 
 # 检查容器资源使用
 docker stats --no-stream
@@ -114,23 +120,25 @@ sudo systemctl status docker
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs [service_name]
 
 # 重新创建服务
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring up -d --force-recreate
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production up -d --force-recreate
 ```
 
-**2. 容器监控问题**
+**2. SSL证书监控问题**
 ```bash
-# cAdvisor已移除，使用以下替代方案:
+# 系统监控已移除，使用SSL证书管理内置功能:
 
-# 查看容器资源使用情况
-docker stats --no-stream
+# 查看SSL证书状态
+curl http://localhost/api/certificates/status
+
+# 查看证书到期情况
+curl http://localhost/api/certificates/expiry
 
 # 查看容器状态和日志
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml ps
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs
 
-# 使用Prometheus和node-exporter监控
-curl http://localhost:9090/targets
-curl http://localhost:9100/metrics
+# 查看容器资源使用情况
+docker stats --no-stream
 ```
 
 **3. 数据库连接失败**
@@ -192,8 +200,8 @@ sudo systemctl restart docker
 git pull origin main
 
 # 重新构建和部署
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring down
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring up -d --build
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production down
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production up -d --build
 ```
 
 ### 定期维护

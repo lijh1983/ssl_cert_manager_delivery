@@ -208,18 +208,17 @@ sudo cat /etc/docker/daemon.json
 # 脚本会自动执行验证，也可以手动验证:
 
 # 检查服务状态
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring ps
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production ps
 
 # 验证核心功能
 curl http://localhost/health
 curl http://localhost/api/health
 curl -I http://localhost/
 
-# 检查监控服务
-# curl http://localhost:8080/metrics  # cAdvisor (已移除)
-curl http://localhost/prometheus/   # Prometheus
-curl http://localhost/grafana/      # Grafana
-docker stats --no-stream           # 容器资源监控替代方案
+# 检查SSL证书管理功能
+curl http://localhost/api/certificates/status  # SSL证书状态
+curl http://localhost/api/certificates/expiry  # 证书到期情况
+docker stats --no-stream                       # 容器资源监控
 ```
 
 ### 查看验证报告

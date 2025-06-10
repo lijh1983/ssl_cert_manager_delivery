@@ -298,14 +298,12 @@ VITE_API_BASE_URL=/api
 BACKEND_WORKERS=2
 LOG_LEVEL=INFO
 
-# 监控配置
-GRAFANA_USER=admin
-GRAFANA_PASSWORD=$(openssl rand -base64 16)
-PROMETHEUS_PORT=9090
+# SSL证书管理功能配置 (专注核心业务)
+# 系统监控功能已移除，专注SSL证书管理
 
 # 功能开关
-ENABLE_METRICS=true
-ENABLE_MONITORING=true
+ENABLE_METRICS=false
+ENABLE_MONITORING=false
 
 # Let's Encrypt SSL证书配置
 ACME_EMAIL=19822088@qq.com
@@ -672,16 +670,15 @@ EOF
 create_data_directories() {
     log_info "创建数据目录..."
     
-    # 创建目录结构
+    # 创建目录结构 (专注SSL证书管理核心功能)
     sudo mkdir -p /opt/ssl-manager/{data,logs,certs,backups}
-    sudo mkdir -p /opt/ssl-manager/data/{postgres,redis,prometheus,grafana}
-    
+    sudo mkdir -p /opt/ssl-manager/data/{postgres,redis}
+
     # 设置权限
     sudo chown -R $USER:$USER /opt/ssl-manager
     sudo chown -R 70:70 /opt/ssl-manager/data/postgres      # PostgreSQL
-    sudo chown -R 472:472 /opt/ssl-manager/data/grafana     # Grafana
-    sudo chown -R 65534:65534 /opt/ssl-manager/data/prometheus  # Prometheus
     sudo chown -R 999:999 /opt/ssl-manager/data/redis       # Redis
+    # 监控数据目录已移除 (专注SSL证书管理)
     
     log_success "数据目录创建完成"
 }
@@ -720,8 +717,8 @@ show_env_summary() {
     echo "域名: $(grep '^DOMAIN_NAME=' "$ENV_FILE" | cut -d'=' -f2)"
     echo "邮箱: $(grep '^EMAIL=' "$ENV_FILE" | cut -d'=' -f2)"
     echo "数据库用户: $(grep '^DB_USER=' "$ENV_FILE" | cut -d'=' -f2)"
-    echo "Grafana用户: $(grep '^GRAFANA_USER=' "$ENV_FILE" | cut -d'=' -f2)"
-    echo "Grafana密码: $(grep '^GRAFANA_PASSWORD=' "$ENV_FILE" | cut -d'=' -f2)"
+    echo "SSL证书管理: 专注核心业务功能"
+    # 监控配置已移除
     echo "----------------------------------------"
 
     if confirm_action "是否需要修改任何配置？"; then
@@ -847,7 +844,7 @@ start_services() {
 check_port_conflicts() {
     log_info "检查端口冲突..."
 
-    local ports=(80 443 9090 3000)  # 移除8080端口(cAdvisor已移除)
+    local ports=(80 443)  # 专注SSL证书管理核心端口
     local conflicts=()
 
     for port in "${ports[@]}"; do
@@ -911,7 +908,7 @@ wait_for_services() {
 
         log_debug "服务状态: $healthy_count/$total_count 健康"
 
-        if [[ $healthy_count -ge 6 ]]; then  # 至少6个服务健康 (cAdvisor已移除)
+        if [[ $healthy_count -ge 5 ]]; then  # 至少5个核心服务健康 (专注SSL证书管理)
             log_success "服务启动完成"
             return 0
         fi
@@ -1028,7 +1025,7 @@ generate_verification_report() {
         echo ""
 
         echo "=== 网络端口 ==="
-        netstat -tlnp | grep -E ":80|:443|:9090|:3000"  # 移除8080端口(cAdvisor已移除)
+        netstat -tlnp | grep -E ":80|:443"  # SSL证书管理核心端口
         echo ""
 
     } > "$report_file"
@@ -1040,17 +1037,16 @@ generate_verification_report() {
 show_deployment_info() {
     log_success "🎉 SSL证书管理器生产环境部署成功！"
     echo ""
-    echo "访问信息:"
+    echo "SSL证书管理系统访问信息:"
     echo "  前端页面: http://localhost/"
     echo "  API接口: http://localhost/api/"
-    echo "  Prometheus: http://localhost/prometheus/"
-    echo "  Grafana: http://localhost/grafana/"
-    echo "  # cAdvisor已移除 (原因: cgroup v2兼容性问题)"
+    echo "  API文档: http://localhost/api/docs"
+    echo "  # 系统监控已移除 (专注SSL证书管理核心功能)"
     echo ""
     echo "管理命令:"
-    echo "  查看服务状态: docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring ps"
-    echo "  查看日志: docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring logs -f"
-    echo "  停止服务: docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring down"
+    echo "  查看服务状态: docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production ps"
+    echo "  查看日志: docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production logs -f"
+    echo "  停止服务: docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production down"
     echo ""
     echo "数据目录: /opt/ssl-manager/"
     echo "配置文件: .env"
@@ -1137,34 +1133,33 @@ show_deployment_info() {
     echo "  环境配置: $ENV_FILE"
     echo "  数据目录: /opt/ssl-manager/"
     echo ""
-    echo "🌐 服务访问地址:"
+    echo "🌐 SSL证书管理系统访问地址:"
     echo "  前端页面: http://localhost/"
     echo "  API接口: http://localhost/api/"
     echo "  API文档: http://localhost/api/docs"
-    echo "  Prometheus: http://localhost/prometheus/"
-    echo "  Grafana: http://localhost/grafana/"
-    echo "  # cAdvisor已移除 (原因: cgroup v2兼容性问题)"
+    echo "  # 系统监控已移除 (专注SSL证书管理核心功能)"
     echo ""
-    echo "🔑 登录信息:"
-    if [[ -f "$ENV_FILE" ]]; then
-        local grafana_user=$(grep '^GRAFANA_USER=' "$ENV_FILE" | cut -d'=' -f2)
-        local grafana_pass=$(grep '^GRAFANA_PASSWORD=' "$ENV_FILE" | cut -d'=' -f2)
-        echo "  Grafana用户: $grafana_user"
-        echo "  Grafana密码: $grafana_pass"
-    fi
+    echo "🔑 SSL证书管理功能:"
+    echo "  ✓ 主机域名监控：监控证书绑定的域名状态"
+    echo "  ✓ 证书等级检查：DV、OV、EV证书类型识别"
+    echo "  ✓ 加密方式验证：RSA、ECC等加密算法检查"
+    echo "  ✓ 端口监控：443、80等端口的证书状态"
+    echo "  ✓ IP类型识别：IPv4/IPv6支持检查"
+    echo "  ✓ 证书状态跟踪：有效、过期、即将过期状态"
+    echo "  ✓ 有效期管理：剩余天数计算和到期提醒"
     echo ""
     echo "🛠️ 管理命令:"
     echo "  查看服务状态:"
-    echo "    docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring ps"
+    echo "    docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production ps"
     echo ""
     echo "  查看服务日志:"
-    echo "    docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring logs -f"
+    echo "    docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production logs -f"
     echo ""
     echo "  重启服务:"
-    echo "    docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring restart"
+    echo "    docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production restart"
     echo ""
     echo "  停止服务:"
-    echo "    docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring down"
+    echo "    docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production down"
     echo ""
     echo "📞 获取帮助:"
     echo "  脚本帮助: $0 --help"

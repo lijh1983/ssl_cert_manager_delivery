@@ -18,10 +18,9 @@ volumes:
     driver: local
   nginx_logs:
     driver: local
-  prometheus_data:
-    driver: local
-  grafana_data:
-    driver: local
+  # 系统监控数据卷已移除 (专注SSL证书管理核心功能)
+  # prometheus_data: 已移除
+  # grafana_data: 已移除
 
 services:
   # PostgreSQL数据库
@@ -113,7 +112,7 @@ services:
       - ./backend/config:/app/config:ro
     ports:
       - "${BACKEND_PORT:-8000}:8000"
-      # - "${METRICS_PORT:-9090}:9090"  # 避免与Prometheus冲突
+      # 监控端口已移除，专注SSL证书管理功能
     depends_on:
       postgres:
         condition: service_healthy
@@ -190,47 +189,19 @@ services:
     profiles:
       - production
 
-  # Prometheus监控
-  prometheus:
-    # 使用阿里云镜像源提高拉取稳定性
-    image: registry.cn-hangzhou.aliyuncs.com/google_containers/prometheus:v2.45.0
-    container_name: ssl-manager-prometheus
-    restart: unless-stopped
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--storage.tsdb.retention.time=200h'
-      - '--web.enable-lifecycle'
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
-    ports:
-      - "${PROMETHEUS_PORT:-9090}:9090"
-    profiles:
-      - monitoring
-
-  # Grafana可视化
-  grafana:
-    # 使用官方镜像，稳定可靠
-    image: grafana/grafana:latest
-    container_name: ssl-manager-grafana
-    restart: unless-stopped
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
-      GF_USERS_ALLOW_SIGN_UP: false
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
-    ports:
-      - "${GRAFANA_PORT:-3000}:3000"
-    depends_on:
-      - prometheus
-    profiles:
-      - monitoring
+  # 系统监控服务已移除 (专注SSL证书管理核心功能)
+  # SSL证书管理系统内置以下证书监控功能:
+  # - 主机域名监控：监控证书绑定的域名状态
+  # - 证书等级检查：DV、OV、EV证书类型识别
+  # - 加密方式验证：RSA、ECC等加密算法检查
+  # - 端口监控：443、80等端口的证书状态
+  # - IP类型识别：IPv4/IPv6支持检查
+  # - IP地址监控：证书绑定IP的可达性
+  # - 证书状态跟踪：有效、过期、即将过期状态
+  # - 有效期管理：剩余天数计算和到期提醒
+  # - 检测开关控制：启用/禁用特定证书的监控
+  # - 备注信息管理：证书相关的备注和标签
+  # - 操作功能：证书检测、编辑、删除等管理操作
 
   # 日志收集器（可选）
   fluentd:

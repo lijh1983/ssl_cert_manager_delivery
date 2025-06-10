@@ -74,32 +74,38 @@ docker-compose -f docker-compose.aliyun.yml --profile monitoring up -d
 | 前端页面 | http://localhost/ | SSL证书管理界面 |
 | API接口 | http://localhost/api/ | REST API接口 |
 | API文档 | http://localhost/api/docs | Swagger API文档 |
-| Prometheus | http://localhost/prometheus/ | 监控数据收集 |
-| Grafana | http://localhost/grafana/ | 可视化监控面板 |
-| ~~cAdvisor~~ | ~~http://localhost:8080/~~ | ~~容器监控~~ (已移除) |
+| ~~Prometheus~~ | ~~http://localhost/prometheus/~~ | ~~监控数据收集~~ (已移除) |
+| ~~Grafana~~ | ~~http://localhost/grafana/~~ | ~~可视化监控面板~~ (已移除) |
 
-## 🔑 默认登录信息
+**注**: 系统监控功能已移除，专注SSL证书管理核心业务功能
 
-**Grafana监控面板:**
-- 用户名: admin
-- 密码: 查看 `.env` 文件中的 `GRAFANA_PASSWORD`
+## 🔑 SSL证书管理功能
 
-⚠️ **生产环境请及时修改默认密码**
+**核心功能特性:**
+- ✓ 主机域名监控：监控证书绑定的域名状态
+- ✓ 证书等级检查：DV、OV、EV证书类型识别
+- ✓ 加密方式验证：RSA、ECC等加密算法检查
+- ✓ 端口监控：443、80等端口的证书状态
+- ✓ IP类型识别：IPv4/IPv6支持检查
+- ✓ 证书状态跟踪：有效、过期、即将过期状态
+- ✓ 有效期管理：剩余天数计算和到期提醒
+
+**注**: 系统监控功能已移除，专注SSL证书管理核心业务
 
 ## 🛠️ 管理命令
 
 ```bash
 # 查看服务状态 (生产环境)
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring ps
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production ps
 
 # 查看服务日志
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring logs -f
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production logs -f
 
 # 重启特定服务
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml restart backend
 
 # 停止所有服务
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring down
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production down
 
 # 备份数据库
 docker exec ssl-manager-postgres pg_dump -U ssl_user ssl_manager > backup_$(date +%Y%m%d_%H%M%S).sql
@@ -112,11 +118,11 @@ docker stats --no-stream && free -h
 
 - 🔒 **自动SSL证书管理**: Let's Encrypt证书自动申请和续期
 - 🌐 **多域名支持**: 支持单域名、通配符和多域名证书
-- 📊 **实时监控**: Prometheus + Grafana监控面板
+- 📊 **证书监控**: 内置SSL证书状态监控和到期提醒
 - 🔄 **自动部署**: 证书自动部署到多个服务器
 - 📱 **Web管理界面**: 直观的证书管理界面
 - 🗄️ **PostgreSQL数据库**: 高性能数据存储
-- 🚨 **告警系统**: 证书过期提醒和故障告警
+- 🚨 **告警系统**: 证书过期提醒和状态告警
 
 ## 🏗️ 系统架构
 
@@ -131,10 +137,9 @@ docker stats --no-stream && free -h
          │              │   (Database)    │    │     (Cache)     │
          │              └─────────────────┘    └─────────────────┘
          │
-┌─────────────────┐    ┌─────────────────┐
-│   Prometheus    │────│     Grafana     │
-│   (Monitoring)  │    │  (Visualization)│
-└─────────────────┘    └─────────────────┘
+         │
+         │ (系统监控已移除，专注SSL证书管理核心功能)
+         │
 ```
 
 ## 📁 项目结构
