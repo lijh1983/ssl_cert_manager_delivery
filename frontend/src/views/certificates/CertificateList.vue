@@ -4,6 +4,58 @@
     <div class="page-header">
       <h2>证书管理</h2>
       <div class="header-actions">
+        <el-button
+          type="success"
+          :disabled="selectedCertificates.length === 0"
+          @click="showBatchMonitoringConfig"
+        >
+          批量监控配置
+        </el-button>
+        <el-button
+          type="warning"
+          :disabled="selectedCertificates.length === 0"
+          :loading="batchCheckingDomains"
+          @click="batchCheckDomains"
+        >
+          批量域名检查
+        </el-button>
+        <el-button
+          type="info"
+          :disabled="selectedCertificates.length === 0"
+          :loading="batchCheckingPorts"
+          @click="batchCheckPorts"
+        >
+          批量端口检查
+        </el-button>
+
+        <el-dropdown @command="handleBatchOperation">
+          <el-button
+            type="primary"
+            :disabled="selectedCertificates.length === 0"
+          >
+            批量操作<el-icon class="el-icon--right"><arrow-down /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="check">批量检测</el-dropdown-item>
+              <el-dropdown-item command="renew">批量续期</el-dropdown-item>
+              <el-dropdown-item command="delete" divided>批量删除</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+
+        <el-dropdown @command="handleImportExport">
+          <el-button type="success">
+            导入导出<el-icon class="el-icon--right"><arrow-down /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="import">批量导入</el-dropdown-item>
+              <el-dropdown-item command="export">导出数据</el-dropdown-item>
+              <el-dropdown-item command="discovery" divided>网络发现</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <el-button type="primary" :icon="Plus" @click="goToCreatePage">
           申请证书
         </el-button>
@@ -94,6 +146,76 @@
               v-model="scope.row.auto_renew"
               @change="toggleAutoRenew(scope.row)"
             />
+          </template>
+        </el-table-column>
+        <el-table-column prop="monitoring_enabled" label="监控状态" width="100">
+          <template #default="scope">
+            <el-tag
+              :type="scope.row.monitoring_enabled ? 'success' : 'info'"
+              size="small"
+            >
+              {{ scope.row.monitoring_enabled ? '已启用' : '已禁用' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="dns_status" label="DNS状态" width="100">
+          <template #default="scope">
+            <el-tag
+              :type="getDnsStatusType(scope.row.dns_status)"
+              size="small"
+            >
+              {{ getDnsStatusText(scope.row.dns_status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="domain_reachable" label="可达性" width="100">
+          <template #default="scope">
+            <el-tag
+              :type="scope.row.domain_reachable === true ? 'success' : scope.row.domain_reachable === false ? 'danger' : 'info'"
+              size="small"
+            >
+              {{ scope.row.domain_reachable === true ? '可达' : scope.row.domain_reachable === false ? '不可达' : '未知' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="tls_version" label="TLS版本" width="100">
+          <template #default="scope">
+            <el-tag
+              :type="getTlsVersionType(scope.row.tls_version)"
+              size="small"
+            >
+              {{ scope.row.tls_version || '未知' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="certificate_chain_valid" label="证书链" width="100">
+          <template #default="scope">
+            <el-tag
+              :type="scope.row.certificate_chain_valid === true ? 'success' : scope.row.certificate_chain_valid === false ? 'danger' : 'info'"
+              size="small"
+            >
+              {{ scope.row.certificate_chain_valid === true ? '完整' : scope.row.certificate_chain_valid === false ? '不完整' : '未知' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="renewal_status" label="续期状态" width="100">
+          <template #default="scope">
+            <el-tag
+              :type="getRenewalStatusType(scope.row.renewal_status)"
+              size="small"
+            >
+              {{ getRenewalStatusText(scope.row.renewal_status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="import_source" label="来源" width="80">
+          <template #default="scope">
+            <el-tag
+              :type="getImportSourceType(scope.row.import_source)"
+              size="small"
+            >
+              {{ getImportSourceText(scope.row.import_source) }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="250" fixed="right">
@@ -224,6 +346,33 @@
         </el-button>
       </div>
     </el-dialog>
+
+    <!-- 批量监控配置对话框 -->
+    <BatchMonitoringConfig
+      v-model="batchMonitoringVisible"
+      :selected-certificates="selectedCertificates"
+      @success="handleBatchConfigSuccess"
+    />
+
+    <!-- 批量导入对话框 -->
+    <el-dialog
+      v-model="importDialogVisible"
+      title="批量导入证书"
+      width="80%"
+      @close="importDialogVisible = false"
+    >
+      <CertificateImport @import-completed="handleImportCompleted" />
+    </el-dialog>
+
+    <!-- 证书发现对话框 -->
+    <el-dialog
+      v-model="discoveryDialogVisible"
+      title="证书发现扫描"
+      width="80%"
+      @close="discoveryDialogVisible = false"
+    >
+      <CertificateDiscovery @discovery-completed="handleDiscoveryCompleted" />
+    </el-dialog>
   </div>
 </template>
 
@@ -236,6 +385,10 @@ import { certificateApi } from '@/api/certificate'
 import { serverApi } from '@/api/server'
 import type { Certificate, CreateCertificateRequest } from '@/types/certificate'
 import type { Server } from '@/types/server'
+import BatchMonitoringConfig from '@/components/BatchMonitoringConfig.vue'
+import CertificateImport from '@/components/CertificateImport.vue'
+import CertificateDiscovery from '@/components/CertificateDiscovery.vue'
+import { ArrowDown } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 
 const route = useRoute()
@@ -246,6 +399,12 @@ const loading = ref(false)
 const submitting = ref(false)
 const dialogVisible = ref(false)
 const downloadDialogVisible = ref(false)
+const batchMonitoringVisible = ref(false)
+const batchCheckingDomains = ref(false)
+const batchCheckingPorts = ref(false)
+const batchOperating = ref(false)
+const importDialogVisible = ref(false)
+const discoveryDialogVisible = ref(false)
 const certificateList = ref<Certificate[]>([])
 const selectedCertificates = ref<Certificate[]>([])
 const serverOptions = ref<Server[]>([])
@@ -499,6 +658,301 @@ const toggleAutoRenew = async (certificate: Certificate) => {
     certificate.auto_renew = !certificate.auto_renew
     console.error('Failed to update auto renew:', error)
   }
+}
+
+// 显示批量监控配置
+const showBatchMonitoringConfig = () => {
+  if (selectedCertificates.value.length === 0) {
+    ElMessage.warning('请先选择要配置的证书')
+    return
+  }
+  batchMonitoringVisible.value = true
+}
+
+// 批量配置成功回调
+const handleBatchConfigSuccess = () => {
+  // 重新获取证书列表以更新监控状态
+  fetchCertificateList()
+  // 清空选择
+  selectedCertificates.value = []
+}
+
+// 获取DNS状态类型
+const getDnsStatusType = (status?: string): string => {
+  switch (status) {
+    case 'resolved': return 'success'
+    case 'failed': return 'danger'
+    case 'timeout': return 'warning'
+    default: return 'info'
+  }
+}
+
+// 获取DNS状态文本
+const getDnsStatusText = (status?: string): string => {
+  switch (status) {
+    case 'resolved': return '解析成功'
+    case 'failed': return '解析失败'
+    case 'timeout': return '解析超时'
+    case 'error': return '解析错误'
+    default: return '未知'
+  }
+}
+
+// 获取TLS版本类型
+const getTlsVersionType = (version?: string): string => {
+  if (!version) return 'info'
+  if (version.includes('1.3')) return 'success'
+  if (version.includes('1.2')) return 'success'
+  if (version.includes('1.1') || version.includes('1.0')) return 'warning'
+  return 'info'
+}
+
+// 获取续期状态类型
+const getRenewalStatusType = (status?: string): string => {
+  switch (status) {
+    case 'completed': return 'success'
+    case 'in_progress': return 'warning'
+    case 'failed': return 'danger'
+    default: return 'info'
+  }
+}
+
+// 获取续期状态文本
+const getRenewalStatusText = (status?: string): string => {
+  switch (status) {
+    case 'pending': return '待续期'
+    case 'in_progress': return '续期中'
+    case 'completed': return '已完成'
+    case 'failed': return '失败'
+    default: return '未知'
+  }
+}
+
+// 获取导入来源类型
+const getImportSourceType = (source?: string): string => {
+  switch (source) {
+    case 'manual': return 'primary'
+    case 'csv': return 'success'
+    case 'discovery': return 'warning'
+    default: return 'info'
+  }
+}
+
+// 获取导入来源文本
+const getImportSourceText = (source?: string): string => {
+  switch (source) {
+    case 'manual': return '手动'
+    case 'csv': return 'CSV'
+    case 'discovery': return '发现'
+    default: return '未知'
+  }
+}
+
+// 批量检查域名
+const batchCheckDomains = async () => {
+  if (selectedCertificates.value.length === 0) {
+    ElMessage.warning('请先选择要检查的证书')
+    return
+  }
+
+  try {
+    // 确认操作
+    const confirmResult = await ElMessageBox.confirm(
+      `确定要对 ${selectedCertificates.value.length} 个证书进行域名检查吗？`,
+      '确认操作',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+
+    if (confirmResult !== 'confirm') return
+
+    batchCheckingDomains.value = true
+
+    const requestData = {
+      certificate_ids: selectedCertificates.value.map(cert => cert.id),
+      max_concurrent: 5
+    }
+
+    const response = await certificateApi.batchCheckDomains(requestData)
+
+    ElMessage.success(`批量域名检查完成: 成功 ${response.data.success_count} 个，失败 ${response.data.failed_count} 个`)
+
+    // 重新获取证书列表以更新域名状态
+    fetchCertificateList()
+    // 清空选择
+    selectedCertificates.value = []
+
+  } catch (error) {
+    console.error('批量域名检查失败:', error)
+    ElMessage.error('批量域名检查失败')
+  } finally {
+    batchCheckingDomains.value = false
+  }
+}
+
+// 批量检查端口
+const batchCheckPorts = async () => {
+  if (selectedCertificates.value.length === 0) {
+    ElMessage.warning('请先选择要检查的证书')
+    return
+  }
+
+  try {
+    // 确认操作
+    const confirmResult = await ElMessageBox.confirm(
+      `确定要对 ${selectedCertificates.value.length} 个证书进行端口检查吗？`,
+      '确认操作',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+
+    if (confirmResult !== 'confirm') return
+
+    batchCheckingPorts.value = true
+
+    const requestData = {
+      certificate_ids: selectedCertificates.value.map(cert => cert.id),
+      max_concurrent: 3
+    }
+
+    const response = await certificateApi.batchCheckPorts(requestData)
+
+    ElMessage.success(`批量端口检查完成: 成功 ${response.data.success_count} 个，失败 ${response.data.failed_count} 个`)
+
+    // 重新获取证书列表以更新端口状态
+    fetchCertificateList()
+    // 清空选择
+    selectedCertificates.value = []
+
+  } catch (error) {
+    console.error('批量端口检查失败:', error)
+    ElMessage.error('批量端口检查失败')
+  } finally {
+    batchCheckingPorts.value = false
+  }
+}
+
+// 处理批量操作
+const handleBatchOperation = async (command: string) => {
+  if (selectedCertificates.value.length === 0) {
+    ElMessage.warning('请先选择要操作的证书')
+    return
+  }
+
+  try {
+    let confirmMessage = ''
+    let operationType = ''
+
+    switch (command) {
+      case 'check':
+        confirmMessage = `确定要对 ${selectedCertificates.value.length} 个证书进行批量检测吗？`
+        operationType = 'check'
+        break
+      case 'renew':
+        confirmMessage = `确定要对 ${selectedCertificates.value.length} 个证书进行批量续期吗？`
+        operationType = 'renew'
+        break
+      case 'delete':
+        confirmMessage = `确定要删除 ${selectedCertificates.value.length} 个证书吗？此操作不可恢复！`
+        operationType = 'delete'
+        break
+      default:
+        return
+    }
+
+    const confirmResult = await ElMessageBox.confirm(
+      confirmMessage,
+      '确认操作',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+
+    if (confirmResult !== 'confirm') return
+
+    batchOperating.value = true
+
+    const requestData = {
+      operation_type: operationType,
+      certificate_ids: selectedCertificates.value.map(cert => cert.id),
+      options: {}
+    }
+
+    const response = await certificateApi.batchOperations(requestData)
+
+    ElMessage.success(`批量${command === 'check' ? '检测' : command === 'renew' ? '续期' : '删除'}任务已启动`)
+
+    // 重新获取证书列表
+    fetchCertificateList()
+    // 清空选择
+    selectedCertificates.value = []
+
+  } catch (error) {
+    console.error('批量操作失败:', error)
+    ElMessage.error('批量操作失败')
+  } finally {
+    batchOperating.value = false
+  }
+}
+
+// 处理导入导出
+const handleImportExport = (command: string) => {
+  switch (command) {
+    case 'import':
+      importDialogVisible.value = true
+      break
+    case 'export':
+      exportCertificates()
+      break
+    case 'discovery':
+      discoveryDialogVisible.value = true
+      break
+  }
+}
+
+// 导出证书
+const exportCertificates = async () => {
+  try {
+    const blob = await certificateApi.exportCertificates()
+
+    // 创建下载链接
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `certificates_export_${dayjs().format('YYYYMMDD_HHmmss')}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+
+    ElMessage.success('证书数据导出成功')
+
+  } catch (error) {
+    console.error('导出失败:', error)
+    ElMessage.error('导出失败')
+  }
+}
+
+// 导入完成处理
+const handleImportCompleted = (result: any) => {
+  ElMessage.success(`导入完成：成功 ${result.success_count} 个，失败 ${result.failed_count} 个`)
+  importDialogVisible.value = false
+  fetchCertificateList()
+}
+
+// 发现完成处理
+const handleDiscoveryCompleted = (certificates: any[]) => {
+  ElMessage.success(`发现 ${certificates.length} 个证书`)
+  discoveryDialogVisible.value = false
+  fetchCertificateList()
 }
 
 // 删除证书

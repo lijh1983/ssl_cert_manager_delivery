@@ -103,6 +103,31 @@
         </el-tabs>
       </el-card>
 
+      <!-- 监控配置 -->
+      <MonitoringConfig :certificate-id="certificateId" />
+
+      <!-- 域名监控状态 -->
+      <DomainMonitoringStatus :certificate-id="certificateId" />
+
+      <!-- 域名监控历史 -->
+      <DomainMonitoringChart :certificate-id="certificateId" />
+
+      <!-- 端口监控状态 -->
+      <PortMonitoringStatus :certificate-id="certificateId" />
+
+      <!-- TLS安全评估 -->
+      <TlsSecurityAssessment :certificate-id="certificateId" />
+
+      <!-- 证书操作面板 -->
+      <CertificateOperationsPanel
+        :certificate="certificate"
+        @refresh="fetchCertificateDetail"
+        @task-started="handleTaskStarted"
+      />
+
+      <!-- 操作历史 -->
+      <CertificateOperationHistory :certificate-id="certificateId" />
+
       <!-- 部署记录 -->
       <el-card class="deployments-card">
         <template #header>
@@ -183,6 +208,13 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { certificateApi } from '@/api/certificate'
 import type { Certificate, CertificateDeployment } from '@/types/certificate'
+import MonitoringConfig from '@/components/MonitoringConfig.vue'
+import DomainMonitoringStatus from '@/components/DomainMonitoringStatus.vue'
+import DomainMonitoringChart from '@/components/DomainMonitoringChart.vue'
+import PortMonitoringStatus from '@/components/PortMonitoringStatus.vue'
+import TlsSecurityAssessment from '@/components/TlsSecurityAssessment.vue'
+import CertificateOperationsPanel from '@/components/CertificateOperationsPanel.vue'
+import CertificateOperationHistory from '@/components/CertificateOperationHistory.vue'
 import dayjs from 'dayjs'
 
 const route = useRoute()
@@ -391,6 +423,12 @@ const toggleAutoRenew = async () => {
     certificate.value.auto_renew = !certificate.value.auto_renew
     console.error('Failed to update auto renew:', error)
   }
+}
+
+// 处理任务启动
+const handleTaskStarted = (taskId: string) => {
+  ElMessage.info(`任务已启动，任务ID: ${taskId}`)
+  // 可以在这里添加任务跟踪逻辑
 }
 
 onMounted(() => {

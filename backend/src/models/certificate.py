@@ -9,11 +9,24 @@ from .database import db
 class Certificate:
     """证书模型类"""
     
-    def __init__(self, id: int = None, domain: str = None, type: str = None, 
+    def __init__(self, id: int = None, domain: str = None, type: str = None,
                  status: str = None, created_at: str = None, expires_at: str = None,
-                 server_id: int = None, ca_type: str = None, 
+                 server_id: int = None, ca_type: str = None,
                  private_key: str = None, certificate: str = None,
-                 updated_at: str = None):
+                 updated_at: str = None, monitoring_enabled: bool = True,
+                 monitoring_frequency: int = 3600, alert_enabled: bool = True,
+                 notes: str = None, tags: str = None, owner: str = None,
+                 business_unit: str = None, dns_status: str = None,
+                 dns_response_time: int = None, domain_reachable: bool = None,
+                 http_status_code: int = None, last_dns_check: str = None,
+                 last_reachability_check: str = None, monitored_ports: str = None,
+                 ssl_handshake_time: int = None, tls_version: str = None,
+                 cipher_suite: str = None, certificate_chain_valid: bool = None,
+                 http_redirect_status: str = None, last_port_check: str = None,
+                 last_manual_check: str = None, check_in_progress: bool = None,
+                 renewal_status: str = None, auto_renewal_enabled: bool = None,
+                 renewal_days_before: int = None, import_source: str = None,
+                 last_renewal_attempt: str = None):
         """初始化证书对象"""
         self.id = id
         self.domain = domain
@@ -26,6 +39,38 @@ class Certificate:
         self.private_key = private_key
         self.certificate = certificate
         self.updated_at = updated_at
+        # 监控控制字段
+        self.monitoring_enabled = monitoring_enabled
+        self.monitoring_frequency = monitoring_frequency  # 监控频率(秒)
+        self.alert_enabled = alert_enabled
+        # 备注信息字段
+        self.notes = notes
+        self.tags = tags  # JSON格式存储标签
+        self.owner = owner
+        self.business_unit = business_unit
+        # 域名监控字段
+        self.dns_status = dns_status
+        self.dns_response_time = dns_response_time
+        self.domain_reachable = domain_reachable
+        self.http_status_code = http_status_code
+        self.last_dns_check = last_dns_check
+        self.last_reachability_check = last_reachability_check
+        # 端口监控字段
+        self.monitored_ports = monitored_ports
+        self.ssl_handshake_time = ssl_handshake_time
+        self.tls_version = tls_version
+        self.cipher_suite = cipher_suite
+        self.certificate_chain_valid = certificate_chain_valid
+        self.http_redirect_status = http_redirect_status
+        self.last_port_check = last_port_check
+        # 证书操作字段
+        self.last_manual_check = last_manual_check
+        self.check_in_progress = check_in_progress
+        self.renewal_status = renewal_status
+        self.auto_renewal_enabled = auto_renewal_enabled
+        self.renewal_days_before = renewal_days_before
+        self.import_source = import_source
+        self.last_renewal_attempt = last_renewal_attempt
     
     @classmethod
     def get_by_id(cls, cert_id: int) -> Optional['Certificate']:
@@ -161,9 +206,41 @@ class Certificate:
                 'expires_at': self.expires_at,
                 'server_id': self.server_id,
                 'ca_type': self.ca_type,
-                'updated_at': now
+                'updated_at': now,
+                # 监控控制字段
+                'monitoring_enabled': getattr(self, 'monitoring_enabled', True),
+                'monitoring_frequency': getattr(self, 'monitoring_frequency', 3600),
+                'alert_enabled': getattr(self, 'alert_enabled', True),
+                # 备注信息字段
+                'notes': getattr(self, 'notes', None),
+                'tags': getattr(self, 'tags', None),
+                'owner': getattr(self, 'owner', None),
+                'business_unit': getattr(self, 'business_unit', None),
+                # 域名监控字段
+                'dns_status': getattr(self, 'dns_status', None),
+                'dns_response_time': getattr(self, 'dns_response_time', None),
+                'domain_reachable': getattr(self, 'domain_reachable', None),
+                'http_status_code': getattr(self, 'http_status_code', None),
+                'last_dns_check': getattr(self, 'last_dns_check', None),
+                'last_reachability_check': getattr(self, 'last_reachability_check', None),
+                # 端口监控字段
+                'monitored_ports': getattr(self, 'monitored_ports', None),
+                'ssl_handshake_time': getattr(self, 'ssl_handshake_time', None),
+                'tls_version': getattr(self, 'tls_version', None),
+                'cipher_suite': getattr(self, 'cipher_suite', None),
+                'certificate_chain_valid': getattr(self, 'certificate_chain_valid', None),
+                'http_redirect_status': getattr(self, 'http_redirect_status', None),
+                'last_port_check': getattr(self, 'last_port_check', None),
+                # 证书操作字段
+                'last_manual_check': getattr(self, 'last_manual_check', None),
+                'check_in_progress': getattr(self, 'check_in_progress', None),
+                'renewal_status': getattr(self, 'renewal_status', None),
+                'auto_renewal_enabled': getattr(self, 'auto_renewal_enabled', None),
+                'renewal_days_before': getattr(self, 'renewal_days_before', None),
+                'import_source': getattr(self, 'import_source', None),
+                'last_renewal_attempt': getattr(self, 'last_renewal_attempt', None)
             }
-            
+
             # 如果有私钥和证书内容，也更新
             if self.private_key:
                 data['private_key'] = self.private_key
@@ -184,7 +261,39 @@ class Certificate:
                 'ca_type': self.ca_type,
                 'private_key': self.private_key,
                 'certificate': self.certificate,
-                'updated_at': now
+                'updated_at': now,
+                # 监控控制字段
+                'monitoring_enabled': getattr(self, 'monitoring_enabled', True),
+                'monitoring_frequency': getattr(self, 'monitoring_frequency', 3600),
+                'alert_enabled': getattr(self, 'alert_enabled', True),
+                # 备注信息字段
+                'notes': getattr(self, 'notes', None),
+                'tags': getattr(self, 'tags', None),
+                'owner': getattr(self, 'owner', None),
+                'business_unit': getattr(self, 'business_unit', None),
+                # 域名监控字段
+                'dns_status': getattr(self, 'dns_status', None),
+                'dns_response_time': getattr(self, 'dns_response_time', None),
+                'domain_reachable': getattr(self, 'domain_reachable', None),
+                'http_status_code': getattr(self, 'http_status_code', None),
+                'last_dns_check': getattr(self, 'last_dns_check', None),
+                'last_reachability_check': getattr(self, 'last_reachability_check', None),
+                # 端口监控字段
+                'monitored_ports': getattr(self, 'monitored_ports', '["80", "443"]'),
+                'ssl_handshake_time': getattr(self, 'ssl_handshake_time', None),
+                'tls_version': getattr(self, 'tls_version', None),
+                'cipher_suite': getattr(self, 'cipher_suite', None),
+                'certificate_chain_valid': getattr(self, 'certificate_chain_valid', None),
+                'http_redirect_status': getattr(self, 'http_redirect_status', None),
+                'last_port_check': getattr(self, 'last_port_check', None),
+                # 证书操作字段
+                'last_manual_check': getattr(self, 'last_manual_check', None),
+                'check_in_progress': getattr(self, 'check_in_progress', 0),
+                'renewal_status': getattr(self, 'renewal_status', 'pending'),
+                'auto_renewal_enabled': getattr(self, 'auto_renewal_enabled', 0),
+                'renewal_days_before': getattr(self, 'renewal_days_before', 30),
+                'import_source': getattr(self, 'import_source', 'manual'),
+                'last_renewal_attempt': getattr(self, 'last_renewal_attempt', None)
             }
             cert_id = db.insert('certificates', data)
             self.id = cert_id
@@ -216,7 +325,39 @@ class Certificate:
             'expires_at': self.expires_at,
             'server_id': self.server_id,
             'ca_type': self.ca_type,
-            'updated_at': self.updated_at
+            'updated_at': self.updated_at,
+            # 监控控制字段
+            'monitoring_enabled': getattr(self, 'monitoring_enabled', True),
+            'monitoring_frequency': getattr(self, 'monitoring_frequency', 3600),
+            'alert_enabled': getattr(self, 'alert_enabled', True),
+            # 备注信息字段
+            'notes': getattr(self, 'notes', None),
+            'tags': getattr(self, 'tags', None),
+            'owner': getattr(self, 'owner', None),
+            'business_unit': getattr(self, 'business_unit', None),
+            # 域名监控字段
+            'dns_status': getattr(self, 'dns_status', None),
+            'dns_response_time': getattr(self, 'dns_response_time', None),
+            'domain_reachable': getattr(self, 'domain_reachable', None),
+            'http_status_code': getattr(self, 'http_status_code', None),
+            'last_dns_check': getattr(self, 'last_dns_check', None),
+            'last_reachability_check': getattr(self, 'last_reachability_check', None),
+            # 端口监控字段
+            'monitored_ports': getattr(self, 'monitored_ports', None),
+            'ssl_handshake_time': getattr(self, 'ssl_handshake_time', None),
+            'tls_version': getattr(self, 'tls_version', None),
+            'cipher_suite': getattr(self, 'cipher_suite', None),
+            'certificate_chain_valid': getattr(self, 'certificate_chain_valid', None),
+            'http_redirect_status': getattr(self, 'http_redirect_status', None),
+            'last_port_check': getattr(self, 'last_port_check', None),
+            # 证书操作字段
+            'last_manual_check': getattr(self, 'last_manual_check', None),
+            'check_in_progress': getattr(self, 'check_in_progress', None),
+            'renewal_status': getattr(self, 'renewal_status', None),
+            'auto_renewal_enabled': getattr(self, 'auto_renewal_enabled', None),
+            'renewal_days_before': getattr(self, 'renewal_days_before', None),
+            'import_source': getattr(self, 'import_source', None),
+            'last_renewal_attempt': getattr(self, 'last_renewal_attempt', None)
         }
         
         # 添加服务器名称（如果有）

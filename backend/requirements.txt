@@ -74,3 +74,16 @@ jsonschema==4.19.0
 
 # Timezone Support
 pytz==2023.3
+
+# Data Processing and Analysis
+pandas==2.1.1
+numpy==1.24.3
+
+# DNS Resolution (already included above but ensuring it's available)
+# dnspython==2.4.2 (already included)
+
+# IP Range Checking
+ip-range-check==0.2.0
+
+# Additional SSL/TLS Support
+certifi==2023.7.22

@@ -42,6 +42,11 @@ from utils.logging_config import setup_logging, init_logging_middleware, get_log
 from services.certificate_service import certificate_service
 from services.alert_manager import alert_manager, AlertRule, AlertType, AlertSeverity
 from services.notification import notification_manager
+from services.monitoring_service import MonitoringService
+from services.domain_monitoring_service import DomainMonitoringService
+from services.domain_monitoring_scheduler import domain_monitoring_scheduler
+from services.port_monitoring_service import PortMonitoringService
+from services.certificate_operations_service import CertificateOperationsService
 
 # 获取应用配置
 app_config = get_config()
@@ -58,6 +63,12 @@ setup_logging(
 
 # 获取应用日志记录器
 logger = get_logger('app')
+
+# 初始化服务实例
+monitoring_service = MonitoringService()
+domain_monitoring_service = DomainMonitoringService()
+port_monitoring_service = PortMonitoringService()
+certificate_operations_service = CertificateOperationsService()
 
 # 初始化Flask应用
 app = Flask(__name__)
@@ -1944,6 +1955,1105 @@ def readiness_check():
             }
         }), 503
 
+# SSL证书监控配置API端点
+@app.route('/api/v1/certificates/<int:certificate_id>/monitoring', methods=['GET'])
+@login_required
+def get_certificate_monitoring_config(certificate_id):
+    """获取证书监控配置"""
+    try:
+        result = monitoring_service.get_monitoring_config(certificate_id)
+
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': 'success',
+                'data': result['config']
+            })
+        else:
+            return jsonify({
+                'code': 404,
+                'message': result['error'],
+                'data': None
+            }), 404
+
+    except Exception as e:
+        logger.error(f"获取监控配置失败: {str(e)}")
+        return jsonify({
+            'code': 500,
+            'message': '服务器内部错误',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/certificates/<int:certificate_id>/monitoring', methods=['PUT'])
+@login_required
+@moderate_rate_limit
+@csrf_protect
+@validate_request_data({
+    'monitoring_enabled': {
+        'required': False,
+        'type': bool
+    },
+    'monitoring_frequency': {
+        'required': False,
+        'type': int,
+        'min_value': 300,
+        'max_value': 86400
+    },
+    'alert_enabled': {
+        'required': False,
+        'type': bool
+    }
+})
+def update_certificate_monitoring_config(certificate_id):
+    """更新证书监控配置"""
+    try:
+        data = request.get_json()
+        result = monitoring_service.update_monitoring_config(certificate_id, data)
+
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': result['message'],
+                'data': result['config']
+            })
+        else:
+            return jsonify({
+                'code': 400,
+                'message': result['error'],
+                'data': None
+            }), 400
+
+    except Exception as e:
+        logger.error(f"更新监控配置失败: {str(e)}")
+        return jsonify({
+            'code': 500,
+            'message': '服务器内部错误',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/certificates/monitoring/batch', methods=['PUT'])
+@login_required
+@admin_required
+@moderate_rate_limit
+@csrf_protect
+@validate_request_data({
+    'certificate_ids': {
+        'required': True,
+        'type': list,
+        'min_length': 1,
+        'max_length': 100
+    },
+    'monitoring_enabled': {
+        'required': False,
+        'type': bool
+    },
+    'monitoring_frequency': {
+        'required': False,
+        'type': int,
+        'min_value': 300,
+        'max_value': 86400
+    },
+    'alert_enabled': {
+        'required': False,
+        'type': bool
+    }
+})
+def batch_update_monitoring_config():
+    """批量更新证书监控配置"""
+    try:
+        data = request.get_json()
+        certificate_ids = data['certificate_ids']
+        config = {k: v for k, v in data.items() if k != 'certificate_ids'}
+
+        result = monitoring_service.batch_update_monitoring(certificate_ids, config)
+
+        return jsonify({
+            'code': 200,
+            'message': result['message'],
+            'data': result['details']
+        })
+
+    except Exception as e:
+        logger.error(f"批量更新监控配置失败: {str(e)}")
+        return jsonify({
+            'code': 500,
+            'message': '服务器内部错误',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/monitoring/statistics', methods=['GET'])
+@login_required
+def get_monitoring_statistics():
+    """获取监控统计信息"""
+    try:
+        result = monitoring_service.get_monitoring_statistics()
+
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': 'success',
+                'data': result['statistics']
+            })
+        else:
+            return jsonify({
+                'code': 500,
+                'message': result['error'],
+                'data': None
+            }), 500
+
+    except Exception as e:
+        logger.error(f"获取监控统计失败: {str(e)}")
+        return jsonify({
+            'code': 500,
+            'message': '服务器内部错误',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/certificates/monitoring/enabled', methods=['GET'])
+@login_required
+def get_monitoring_enabled_certificates():
+    """获取启用监控的证书列表"""
+    try:
+        enabled = request.args.get('enabled', 'true').lower() == 'true'
+        result = monitoring_service.get_certificates_by_monitoring_status(enabled)
+
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': 'success',
+                'data': {
+                    'certificates': result['certificates'],
+                    'count': result['count']
+                }
+            })
+        else:
+            return jsonify({
+                'code': 500,
+                'message': result['error'],
+                'data': None
+            }), 500
+
+    except Exception as e:
+        logger.error(f"获取监控证书列表失败: {str(e)}")
+        return jsonify({
+            'code': 500,
+            'message': '服务器内部错误',
+            'data': None
+        }), 500
+
+# SSL证书域名监控API端点
+@app.route('/api/v1/certificates/<int:certificate_id>/domain-status', methods=['GET'])
+@login_required
+def get_certificate_domain_status(certificate_id):
+    """获取证书域名监控状态"""
+    try:
+        # 获取证书信息
+        certificate = Certificate.get_by_id(certificate_id)
+        if not certificate:
+            return jsonify({
+                'code': 404,
+                'message': '证书不存在',
+                'data': None
+            }), 404
+
+        # 构建域名状态信息
+        domain_status = {
+            'certificate_id': certificate_id,
+            'domain': certificate.domain,
+            'dns_status': getattr(certificate, 'dns_status', None),
+            'dns_response_time': getattr(certificate, 'dns_response_time', None),
+            'domain_reachable': getattr(certificate, 'domain_reachable', None),
+            'http_status_code': getattr(certificate, 'http_status_code', None),
+            'last_dns_check': getattr(certificate, 'last_dns_check', None),
+            'last_reachability_check': getattr(certificate, 'last_reachability_check', None)
+        }
+
+        return jsonify({
+            'code': 200,
+            'message': 'success',
+            'data': domain_status
+        })
+
+    except Exception as e:
+        logger.error(f"获取域名状态失败: {str(e)}")
+        return jsonify({
+            'code': 500,
+            'message': '服务器内部错误',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/certificates/<int:certificate_id>/check-domain', methods=['POST'])
+@login_required
+@moderate_rate_limit
+@csrf_protect
+def check_certificate_domain(certificate_id):
+    """手动触发证书域名检查"""
+    try:
+        result = domain_monitoring_service.perform_comprehensive_domain_check(certificate_id)
+
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': '域名检查完成',
+                'data': result
+            })
+        else:
+            return jsonify({
+                'code': 400,
+                'message': result['error'],
+                'data': None
+            }), 400
+
+    except Exception as e:
+        logger.error(f"域名检查失败: {str(e)}")
+        return jsonify({
+            'code': 500,
+            'message': '服务器内部错误',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/certificates/batch-check-domains', methods=['POST'])
+@login_required
+@admin_required
+@moderate_rate_limit
+@csrf_protect
+@validate_request_data({
+    'certificate_ids': {
+        'required': True,
+        'type': list,
+        'min_length': 1,
+        'max_length': 50
+    },
+    'max_concurrent': {
+        'required': False,
+        'type': int,
+        'min_value': 1,
+        'max_value': 10
+    }
+})
+def batch_check_certificate_domains():
+    """批量检查证书域名"""
+    try:
+        data = request.get_json()
+        certificate_ids = data['certificate_ids']
+        max_concurrent = data.get('max_concurrent', 5)
+
+        result = domain_monitoring_service.batch_check_domains(certificate_ids, max_concurrent)
+
+        return jsonify({
+            'code': 200,
+            'message': '批量域名检查完成',
+            'data': result
+        })
+
+    except Exception as e:
+        logger.error(f"批量域名检查失败: {str(e)}")
+        return jsonify({
+            'code': 500,
+            'message': '服务器内部错误',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/domain-monitoring/statistics', methods=['GET'])
+@login_required
+def get_domain_monitoring_statistics():
+    """获取域名监控统计信息"""
+    try:
+        result = domain_monitoring_service.get_domain_monitoring_statistics()
+
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': 'success',
+                'data': result['statistics']
+            })
+        else:
+            return jsonify({
+                'code': 500,
+                'message': result['error'],
+                'data': None
+            }), 500
+
+    except Exception as e:
+        logger.error(f"获取域名监控统计失败: {str(e)}")
+        return jsonify({
+            'code': 500,
+            'message': '服务器内部错误',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/certificates/<int:certificate_id>/domain-history', methods=['GET'])
+@login_required
+def get_certificate_domain_history(certificate_id):
+    """获取证书域名监控历史"""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = min(request.args.get('per_page', 20, type=int), 100)
+        check_type = request.args.get('check_type', None)
+
+        # 构建查询条件
+        where_conditions = ['certificate_id = ?']
+        params = [certificate_id]
+
+        if check_type:
+            where_conditions.append('check_type = ?')
+            params.append(check_type)
+
+        where_clause = ' AND '.join(where_conditions)
+
+        # 获取总数
+        count_query = f"SELECT COUNT(*) as count FROM domain_monitoring_history WHERE {where_clause}"
+        db = Database()
+        conn = db.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(count_query, params)
+        total = cursor.fetchone()[0]
+
+        # 获取分页数据
+        offset = (page - 1) * per_page
+        data_query = f"""
+            SELECT * FROM domain_monitoring_history
+            WHERE {where_clause}
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+        """
+        params.extend([per_page, offset])
+
+        cursor.execute(data_query, params)
+        history_records = []
+
+        for row in cursor.fetchall():
+            history_records.append({
+                'id': row[0],
+                'certificate_id': row[1],
+                'check_type': row[2],
+                'status': row[3],
+                'response_time': row[4],
+                'details': row[5],
+                'error_message': row[6],
+                'created_at': row[7]
+            })
+
+        conn.close()
+
+        return jsonify({
+            'code': 200,
+            'message': 'success',
+            'data': {
+                'history': history_records,
+                'pagination': {
+                    'page': page,
+                    'per_page': per_page,
+                    'total': total,
+                    'pages': (total + per_page - 1) // per_page
+                }
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"获取域名监控历史失败: {str(e)}")
+        return jsonify({
+            'code': 500,
+            'message': '服务器内部错误',
+            'data': None
+        }), 500
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
+# SSL证书端口监控API端点
+@app.route('/api/v1/certificates/<int:certificate_id>/port-status', methods=['GET'])
+@login_required
+def get_certificate_port_status(certificate_id):
+    """获取证书端口监控状态"""
+    try:
+        # 获取证书信息
+        certificate = Certificate.get_by_id(certificate_id)
+        if not certificate:
+            return jsonify({
+                'code': 404,
+                'message': '证书不存在',
+                'data': None
+            }), 404
+
+        # 构建端口状态信息
+        port_status = {
+            'certificate_id': certificate_id,
+            'domain': certificate.domain,
+            'monitored_ports': getattr(certificate, 'monitored_ports', None),
+            'ssl_handshake_time': getattr(certificate, 'ssl_handshake_time', None),
+            'tls_version': getattr(certificate, 'tls_version', None),
+            'cipher_suite': getattr(certificate, 'cipher_suite', None),
+            'certificate_chain_valid': getattr(certificate, 'certificate_chain_valid', None),
+            'http_redirect_status': getattr(certificate, 'http_redirect_status', None),
+            'last_port_check': getattr(certificate, 'last_port_check', None)
+        }
+
+        return jsonify({
+            'code': 200,
+            'message': 'success',
+            'data': port_status
+        })
+
+    except Exception as e:
+        logger.error(f"获取端口状态失败: {str(e)}")
+        return jsonify({
+            'code': 500,
+            'message': '服务器内部错误',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/certificates/<int:certificate_id>/check-ports', methods=['POST'])
+@login_required
+@moderate_rate_limit
+@csrf_protect
+def check_certificate_ports(certificate_id):
+    """手动触发证书端口检查"""
+    try:
+        result = port_monitoring_service.perform_comprehensive_port_check(certificate_id)
+
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': '端口检查完成',
+                'data': result
+            })
+        else:
+            return jsonify({
+                'code': 400,
+                'message': result['error'],
+                'data': None
+            }), 400
+
+    except Exception as e:
+        logger.error(f"端口检查失败: {str(e)}")
+        return jsonify({
+            'code': 500,
+            'message': '服务器内部错误',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/certificates/<int:certificate_id>/configure-ports', methods=['POST'])
+@login_required
+@moderate_rate_limit
+@csrf_protect
+@validate_request_data({
+    'ports': {
+        'required': True,
+        'type': list,
+        'min_length': 1,
+        'max_length': 20
+    }
+})
+def configure_certificate_ports(certificate_id):
+    """配置证书监控端口"""
+    try:
+        data = request.get_json()
+        ports = data['ports']
+
+        # 验证端口格式
+        try:
+            ports = [int(port) for port in ports]
+        except (ValueError, TypeError):
+            return jsonify({
+                'code': 400,
+                'message': '端口必须为数字',
+                'data': None
+            }), 400
+
+        result = port_monitoring_service.configure_monitored_ports(certificate_id, ports)
+
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': result['message'],
+                'data': {'monitored_ports': result['monitored_ports']}
+            })
+        else:
+            return jsonify({
+                'code': 400,
+                'message': result['error'],
+                'data': None
+            }), 400
+
+    except Exception as e:
+        logger.error(f"配置监控端口失败: {str(e)}")
+        return jsonify({
+            'code': 500,
+            'message': '服务器内部错误',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/port-monitoring/security-report', methods=['GET'])
+@login_required
+def get_port_security_report():
+    """生成端口安全评估报告"""
+    try:
+        certificate_id = request.args.get('certificate_id', type=int)
+        result = port_monitoring_service.generate_security_report(certificate_id)
+
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': 'success',
+                'data': result['report']
+            })
+        else:
+            return jsonify({
+                'code': 500,
+                'message': result['error'],
+                'data': None
+            }), 500
+
+    except Exception as e:
+        logger.error(f"生成安全报告失败: {str(e)}")
+        return jsonify({
+            'code': 500,
+            'message': '服务器内部错误',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/certificates/batch-check-ports', methods=['POST'])
+@login_required
+@admin_required
+@moderate_rate_limit
+@csrf_protect
+@validate_request_data({
+    'certificate_ids': {
+        'required': True,
+        'type': list,
+        'min_length': 1,
+        'max_length': 30
+    },
+    'max_concurrent': {
+        'required': False,
+        'type': int,
+        'min_value': 1,
+        'max_value': 5
+    }
+})
+def batch_check_certificate_ports():
+    """批量检查证书端口"""
+    try:
+        data = request.get_json()
+        certificate_ids = data['certificate_ids']
+        max_concurrent = data.get('max_concurrent', 3)
+
+        result = port_monitoring_service.batch_check_ports(certificate_ids, max_concurrent)
+
+        return jsonify({
+            'code': 200,
+            'message': '批量端口检查完成',
+            'data': result
+        })
+
+    except Exception as e:
+        logger.error(f"批量端口检查失败: {str(e)}")
+        return jsonify({
+            'code': 500,
+            'message': '服务器内部错误',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/port-monitoring/statistics', methods=['GET'])
+@login_required
+def get_port_monitoring_statistics():
+    """获取端口监控统计信息"""
+    try:
+        result = port_monitoring_service.get_port_monitoring_statistics()
+
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': 'success',
+                'data': result['statistics']
+            })
+        else:
+            return jsonify({
+                'code': 500,
+                'message': result['error'],
+                'data': None
+            }), 500
+
+    except Exception as e:
+        logger.error(f"获取端口监控统计失败: {str(e)}")
+        return jsonify({
+            'code': 500,
+            'message': '服务器内部错误',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/certificates/<int:certificate_id>/port-history', methods=['GET'])
+@login_required
+def get_certificate_port_history(certificate_id):
+    """获取证书端口监控历史"""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = min(request.args.get('per_page', 20, type=int), 100)
+        port = request.args.get('port', type=int)
+        check_type = request.args.get('check_type', None)
+
+        # 构建查询条件
+        where_conditions = ['certificate_id = ?']
+        params = [certificate_id]
+
+        if port:
+            where_conditions.append('port = ?')
+            params.append(port)
+
+        if check_type:
+            where_conditions.append('check_type = ?')
+            params.append(check_type)
+
+        where_clause = ' AND '.join(where_conditions)
+
+        # 获取总数
+        count_query = f"SELECT COUNT(*) as count FROM port_monitoring_history WHERE {where_clause}"
+        db = Database()
+        conn = db.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(count_query, params)
+        total = cursor.fetchone()[0]
+
+        # 获取分页数据
+        offset = (page - 1) * per_page
+        data_query = f"""
+            SELECT * FROM port_monitoring_history
+            WHERE {where_clause}
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+        """
+        params.extend([per_page, offset])
+
+        cursor.execute(data_query, params)
+        history_records = []
+
+        for row in cursor.fetchall():
+            history_records.append({
+                'id': row[0],
+                'certificate_id': row[1],
+                'port': row[2],
+                'check_type': row[3],
+                'status': row[4],
+                'handshake_time': row[5],
+                'tls_version': row[6],
+                'cipher_suite': row[7],
+                'security_grade': row[8],
+                'details': row[9],
+                'error_message': row[10],
+                'created_at': row[11]
+            })
+
+        conn.close()
+
+        return jsonify({
+            'code': 200,
+            'message': 'success',
+            'data': {
+                'history': history_records,
+                'pagination': {
+                    'page': page,
+                    'per_page': per_page,
+                    'total': total,
+                    'pages': (total + per_page - 1) // per_page
+                }
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"获取端口监控历史失败: {str(e)}")
+        return jsonify({
+            'code': 500,
+            'message': '服务器内部错误',
+            'data': None
+        }), 500
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
+# SSL证书操作API端点
+@app.route('/api/v1/certificates/<int:certificate_id>/manual-check', methods=['POST'])
+@login_required
+@moderate_rate_limit
+@csrf_protect
+@validate_request_data({
+    'check_types': {
+        'required': False,
+        'type': list,
+        'allowed_values': ['domain', 'port', 'ssl']
+    }
+})
+def manual_check_certificate(certificate_id):
+    """手动触发证书检测"""
+    try:
+        data = request.get_json() or {}
+        check_types = data.get('check_types', ['domain', 'port', 'ssl'])
+
+        result = certificate_operations_service.manual_certificate_check(certificate_id, check_types)
+
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': result['message'],
+                'data': {
+                    'task_id': result['task_id'],
+                    'estimated_duration': result.get('estimated_duration')
+                }
+            })
+        else:
+            return jsonify({
+                'code': 400,
+                'message': result['error'],
+                'data': None
+            }), 400
+
+    except Exception as e:
+        logger.error(f"手动检测失败: {str(e)}")
+        return jsonify({
+            'code': 500,
+            'message': '服务器内部错误',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/certificates/<int:certificate_id>/renew', methods=['POST'])
+@login_required
+@admin_required
+@moderate_rate_limit
+@csrf_protect
+@validate_request_data({
+    'force': {
+        'required': False,
+        'type': bool
+    }
+})
+def renew_certificate(certificate_id):
+    """手动续期证书"""
+    try:
+        data = request.get_json() or {}
+        force = data.get('force', False)
+
+        result = certificate_operations_service.renew_certificate(certificate_id, force)
+
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': result['message'],
+                'data': {
+                    'new_expires_at': result.get('new_expires_at'),
+                    'renewal_details': result.get('renewal_details')
+                }
+            })
+        else:
+            return jsonify({
+                'code': 400,
+                'message': result['error'],
+                'data': result.get('details')
+            }), 400
+
+    except Exception as e:
+        logger.error(f"证书续期失败: {str(e)}")
+        return jsonify({
+            'code': 500,
+            'message': '服务器内部错误',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/certificates/import', methods=['POST'])
+@login_required
+@admin_required
+@strict_rate_limit
+@csrf_protect
+def import_certificates():
+    """批量导入证书"""
+    try:
+        # 检查文件上传
+        if 'file' not in request.files:
+            return jsonify({
+                'code': 400,
+                'message': '请上传CSV文件',
+                'data': None
+            }), 400
+
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({
+                'code': 400,
+                'message': '请选择文件',
+                'data': None
+            }), 400
+
+        if not file.filename.lower().endswith('.csv'):
+            return jsonify({
+                'code': 400,
+                'message': '只支持CSV文件格式',
+                'data': None
+            }), 400
+
+        # 读取文件内容
+        csv_content = file.read().decode('utf-8-sig')
+        user_id = session.get('user_id', 1)  # 获取当前用户ID
+
+        result = certificate_operations_service.import_certificates_from_csv(csv_content, user_id)
+
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': '证书导入完成',
+                'data': result['import_results']
+            })
+        else:
+            return jsonify({
+                'code': 400,
+                'message': result['error'],
+                'data': result.get('invalid_rows')
+            }), 400
+
+    except Exception as e:
+        logger.error(f"证书导入失败: {str(e)}")
+        return jsonify({
+            'code': 500,
+            'message': '服务器内部错误',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/certificates/export', methods=['GET'])
+@login_required
+def export_certificates():
+    """导出证书数据"""
+    try:
+        # 获取过滤参数
+        filters = {}
+        if request.args.get('status'):
+            filters['status'] = request.args.get('status')
+        if request.args.get('expires_before'):
+            filters['expires_before'] = request.args.get('expires_before')
+        if request.args.get('domain_pattern'):
+            filters['domain_pattern'] = request.args.get('domain_pattern')
+
+        result = certificate_operations_service.export_certificates_to_csv(filters)
+
+        if result['success']:
+            # 创建响应
+            response = make_response(result['csv_content'])
+            response.headers['Content-Type'] = 'text/csv; charset=utf-8-sig'
+            response.headers['Content-Disposition'] = f'attachment; filename="{result["filename"]}"'
+
+            return response
+        else:
+            return jsonify({
+                'code': 500,
+                'message': result['error'],
+                'data': None
+            }), 500
+
+    except Exception as e:
+        logger.error(f"证书导出失败: {str(e)}")
+        return jsonify({
+            'code': 500,
+            'message': '服务器内部错误',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/certificates/discovery-scan', methods=['POST'])
+@login_required
+@admin_required
+@strict_rate_limit
+@csrf_protect
+@validate_request_data({
+    'ip_ranges': {
+        'required': True,
+        'type': list,
+        'min_length': 1,
+        'max_length': 10
+    },
+    'ports': {
+        'required': False,
+        'type': list,
+        'max_length': 10
+    }
+})
+def discovery_scan():
+    """网络发现扫描"""
+    try:
+        data = request.get_json()
+        ip_ranges = data['ip_ranges']
+        ports = data.get('ports', [443, 8443, 9443])
+
+        result = certificate_operations_service.import_from_discovery(ip_ranges, ports)
+
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': result['message'],
+                'data': {
+                    'task_id': result['task_id'],
+                    'total_targets': result['total_targets']
+                }
+            })
+        else:
+            return jsonify({
+                'code': 400,
+                'message': result['error'],
+                'data': None
+            }), 400
+
+    except Exception as e:
+        logger.error(f"发现扫描失败: {str(e)}")
+        return jsonify({
+            'code': 500,
+            'message': '服务器内部错误',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/certificates/<int:certificate_id>/operation-history', methods=['GET'])
+@login_required
+def get_certificate_operation_history(certificate_id):
+    """获取证书操作历史"""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = min(request.args.get('per_page', 20, type=int), 100)
+
+        result = certificate_operations_service.get_operation_history(certificate_id, page, per_page)
+
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': 'success',
+                'data': {
+                    'operations': result['operations'],
+                    'pagination': result['pagination']
+                }
+            })
+        else:
+            return jsonify({
+                'code': 500,
+                'message': result['error'],
+                'data': None
+            }), 500
+
+    except Exception as e:
+        logger.error(f"获取操作历史失败: {str(e)}")
+        return jsonify({
+            'code': 500,
+            'message': '服务器内部错误',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/certificates/batch-operations', methods=['POST'])
+@login_required
+@admin_required
+@strict_rate_limit
+@csrf_protect
+@validate_request_data({
+    'operation_type': {
+        'required': True,
+        'type': str,
+        'allowed_values': ['check', 'renew', 'delete']
+    },
+    'certificate_ids': {
+        'required': True,
+        'type': list,
+        'min_length': 1,
+        'max_length': 50
+    },
+    'options': {
+        'required': False,
+        'type': dict
+    }
+})
+def batch_operations():
+    """批量操作"""
+    try:
+        data = request.get_json()
+        operation_type = data['operation_type']
+        certificate_ids = data['certificate_ids']
+        options = data.get('options', {})
+
+        result = certificate_operations_service.batch_operations(operation_type, certificate_ids, options)
+
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': result['message'],
+                'data': {
+                    'task_id': result['task_id'],
+                    'total_count': result['total_count']
+                }
+            })
+        else:
+            return jsonify({
+                'code': 400,
+                'message': result['error'],
+                'data': None
+            }), 400
+
+    except Exception as e:
+        logger.error(f"批量操作失败: {str(e)}")
+        return jsonify({
+            'code': 500,
+            'message': '服务器内部错误',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/tasks/<task_id>/status', methods=['GET'])
+@login_required
+def get_task_status(task_id):
+    """获取任务状态"""
+    try:
+        result = certificate_operations_service.get_task_status(task_id)
+
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': 'success',
+                'data': result['task_info']
+            })
+        else:
+            return jsonify({
+                'code': 404,
+                'message': result['error'],
+                'data': None
+            }), 404
+
+    except Exception as e:
+        logger.error(f"获取任务状态失败: {str(e)}")
+        return jsonify({
+            'code': 500,
+            'message': '服务器内部错误',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/tasks/<task_id>/cancel', methods=['POST'])
+@login_required
+@csrf_protect
+def cancel_task(task_id):
+    """取消任务"""
+    try:
+        result = certificate_operations_service.cancel_task(task_id)
+
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': result['message'],
+                'data': None
+            })
+        else:
+            return jsonify({
+                'code': 400,
+                'message': result['error'],
+                'data': None
+            }), 400
+
+    except Exception as e:
+        logger.error(f"取消任务失败: {str(e)}")
+        return jsonify({
+            'code': 500,
+            'message': '服务器内部错误',
+            'data': None
+        }), 500
+
 @app.route('/metrics', methods=['GET'])
 def metrics():
     """Prometheus监控指标端点"""
@@ -1998,4 +3108,25 @@ def metrics():
 
 # 启动应用
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # 启动域名监控调度器
+    try:
+        domain_monitoring_scheduler.start()
+        logger.info("域名监控调度器启动成功")
+    except Exception as e:
+        logger.error(f"域名监控调度器启动失败: {str(e)}")
+
+    # 启动应用
+    port = int(os.environ.get('PORT', 5000))
+    debug = os.environ.get('FLASK_ENV') == 'development'
+
+    logger.info(f"启动SSL证书管理器后端服务，端口: {port}, 调试模式: {debug}")
+
+    try:
+        app.run(host='0.0.0.0', port=port, debug=debug)
+    finally:
+        # 应用关闭时停止调度器
+        try:
+            domain_monitoring_scheduler.stop()
+            logger.info("域名监控调度器已停止")
+        except Exception as e:
+            logger.error(f"停止域名监控调度器失败: {str(e)}")

@@ -27,7 +27,9 @@
     "element-plus": "^2.3.8",
     "echarts": "^5.4.2",
     "dayjs": "^1.11.9",
-    "@element-plus/icons-vue": "^2.1.0"
+    "@element-plus/icons-vue": "^2.1.0",
+    "papaparse": "^5.4.1",
+    "ip-range-check": "^0.2.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^4.2.3",
@@ -43,7 +45,10 @@
     "vitest": "^0.34.1",
     "@vue/test-utils": "^2.4.1",
     "jsdom": "^22.1.0",
-    "terser": "^5.19.2"
+    "terser": "^5.19.2",
+    "@types/papaparse": "^5.3.7",
+    "playwright": "^1.36.2",
+    "@playwright/test": "^1.36.2"
   },
   "engines": {
     "node": ">=16.0.0",

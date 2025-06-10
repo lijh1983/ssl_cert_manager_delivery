@@ -892,20 +892,22 @@ class ACMEClient:
 class ACMEManager:
     """ACME管理器 - 管理多个CA客户端"""
 
-    def __init__(self, email: str, staging: bool = False):
+    def __init__(self, email: str, staging: bool = False, auto_initialize: bool = True):
         """
         初始化ACME管理器
 
         Args:
             email: 联系邮箱
             staging: 是否使用staging环境
+            auto_initialize: 是否自动初始化客户端
         """
         self.email = email
         self.staging = staging
         self.clients = {}
 
-        # 初始化支持的CA
-        self._initialize_clients()
+        # 只在需要时初始化支持的CA
+        if auto_initialize:
+            self._initialize_clients()
 
     def _initialize_clients(self):
         """初始化CA客户端"""
