@@ -1,19 +1,27 @@
 # SSL证书管理器
 
-一个基于Docker的SSL证书自动化管理系统，专为阿里云ECS环境优化，支持Let's Encrypt证书的自动申请、续期和部署。
+一个基于Docker的SSL证书自动化管理系统，专为生产环境优化，支持Let's Encrypt证书的自动申请、续期和部署。
 
-## 🚀 快速部署
+## 🚀 快速开始
 
-### 一键部署（推荐）
+### 📖 文档导航
+
+- **[快速开始指南](QUICKSTART.md)** - 5分钟快速部署
+- **[详细部署指南](DEPLOYMENT.md)** - 完整部署文档
+- **[更新日志](update.log)** - 版本更新记录
+
+### ⚡ 一键部署（推荐）
 
 ```bash
 # 克隆项目
 git clone https://github.com/lijh1983/ssl_cert_manager_delivery.git
 cd ssl_cert_manager_delivery
 
-# 一键部署
-./deploy.sh --quick
+# 生产环境一键部署
+./scripts/deploy-production.sh
 ```
+
+**系统要求**: Ubuntu 22.04.5 LTS, 16GB内存, 4核CPU, 支持cgroup v2
 
 ### 手动部署
 
@@ -40,48 +48,64 @@ docker build -t ssl-manager-frontend-base:latest -f frontend/Dockerfile.base ./f
 docker-compose -f docker-compose.aliyun.yml --profile monitoring up -d
 ```
 
-## 📋 系统要求
+## 📋 系统要求（基于生产环境验证）
 
-- **操作系统**: Ubuntu 20.04+ / CentOS 8+ / Debian 11+
-- **Docker**: 20.10+
-- **内存**: 最低2GB，推荐4GB+
-- **磁盘**: 最低10GB可用空间
-- **网络**: 需要访问互联网（已配置阿里云镜像源）
+### 推荐配置
+- **操作系统**: Ubuntu 22.04.5 LTS (已验证)
+- **架构**: x86_64
+- **内核**: >= 6.0 (支持cgroup v2)
+- **Docker**: 26.1.3+ (必须支持cgroup v2)
+- **Docker Compose**: v2.24.0+
+- **内存**: 16GB (最低8GB)
+- **CPU**: 4核心 (最低2核心)
+- **磁盘**: 系统盘40GB + 数据盘20GB
+- **网络**: 需要访问互联网
 
-## 🌐 访问地址
+### 关键要求
+- ⚠️ **cgroup v2支持**: 必须启用，用于cAdvisor容器监控
+- ⚠️ **端口号格式**: 环境变量中端口号必须使用字符串格式
 
-部署完成后，可以通过以下地址访问：
+## 🌐 服务访问地址
 
-- **主应用**: http://ssl.gzyggl.com
-- **API文档**: http://ssl.gzyggl.com/api/docs
-- **监控面板**: http://ssl.gzyggl.com/monitoring/
-- **Prometheus**: http://ssl.gzyggl.com:9090
+部署完成后，可以通过以下地址访问各项服务：
 
-## 🔑 默认账户
+| 服务 | 地址 | 说明 |
+|------|------|------|
+| 前端页面 | http://localhost/ | SSL证书管理界面 |
+| API接口 | http://localhost/api/ | REST API接口 |
+| API文档 | http://localhost/api/docs | Swagger API文档 |
+| Prometheus | http://localhost/prometheus/ | 监控数据收集 |
+| Grafana | http://localhost/grafana/ | 可视化监控面板 |
+| cAdvisor | http://localhost:8080/ | 容器监控 |
 
-- **管理员**: admin / admin123
-- **Grafana**: admin / grafana_admin_123
-- **数据库**: ssl_user / ssl_password_123
+## 🔑 默认登录信息
+
+**Grafana监控面板:**
+- 用户名: admin
+- 密码: 查看 `.env` 文件中的 `GRAFANA_PASSWORD`
 
 ⚠️ **生产环境请及时修改默认密码**
 
 ## 🛠️ 管理命令
 
 ```bash
-# 查看服务状态
-docker-compose -f docker-compose.aliyun.yml ps
+# 查看服务状态 (生产环境)
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring ps
 
 # 查看服务日志
-docker-compose -f docker-compose.aliyun.yml logs -f
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring logs -f
 
-# 重启服务
-docker-compose -f docker-compose.aliyun.yml restart
+# 重启特定服务
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml restart backend
 
-# 停止服务
-docker-compose -f docker-compose.aliyun.yml down
+# 停止所有服务
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring down
 
 # 备份数据库
-docker exec ssl-manager-postgres pg_dump -U ssl_user ssl_manager > backup.sql
+docker exec ssl-manager-postgres pg_dump -U ssl_user ssl_manager > backup_$(date +%Y%m%d_%H%M%S).sql
+
+# 检查系统资源
+docker stats --no-stream && free -h
 ```
 
 ## 📊 功能特性

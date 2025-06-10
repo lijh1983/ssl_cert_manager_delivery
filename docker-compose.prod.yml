@@ -234,8 +234,8 @@ services:
           # cpus: '0.25'
 
   cadvisor:
-    # 使用Docker Hub官方镜像替代gcr.io，解决网络访问问题
-    image: google/cadvisor:latest
+    # 使用支持cgroup v2的最新版本
+    image: gcr.io/cadvisor/cadvisor:v0.47.0
     container_name: ssl-manager-cadvisor
     restart: unless-stopped
     privileged: true
@@ -246,11 +246,12 @@ services:
       - /var/run:/var/run:ro
       - /sys:/sys:ro
       - /var/lib/docker:/var/lib/docker:ro
-      - /cgroup:/cgroup:ro
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
     command:
       - '--housekeeping_interval=10s'
       - '--docker_only=true'
+      - '--store_container_labels=false'
+      - '--whitelisted_container_labels=io.kubernetes.container.name,io.kubernetes.pod.name,io.kubernetes.pod.namespace'
     ports:
       - "8080:8080"
     # deploy:

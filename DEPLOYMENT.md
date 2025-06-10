@@ -1,16 +1,43 @@
 # SSL证书管理器部署指南
 
-本指南提供SSL证书管理器在阿里云ECS环境中的详细部署步骤。
+本指南提供SSL证书管理器在生产环境中的完整部署方案，基于实际生产环境部署经验编写。
 
-## 📋 部署前准备
+## 📋 系统要求
 
-### 系统要求
+### 推荐配置（基于生产环境验证）
 
-- **操作系统**: Ubuntu 20.04+ / CentOS 8+ / Debian 11+
-- **Docker**: 20.10+
-- **内存**: 最低2GB，推荐4GB+
-- **磁盘**: 最低10GB可用空间
-- **网络**: 需要访问互联网
+- **操作系统**: Ubuntu 22.04.5 LTS (Jammy Jellyfish) - 已验证
+- **架构**: x86_64
+- **内核版本**: >= 6.0 (推荐 6.12+，支持cgroup v2)
+- **Docker**: 26.1.3+ (必须支持cgroup v2)
+- **Docker Compose**: v2.24.0+
+- **内存**: 16GB (最低8GB)
+- **CPU**: 4核心 (最低2核心)
+- **磁盘**:
+  - 系统盘: 40GB SSD
+  - 数据盘: 20GB SSD (用于数据持久化)
+- **网络**: 需要访问互联网，支持Docker镜像拉取
+
+### 关键兼容性要求
+
+**⚠️ 重要: cgroup v2支持**
+```bash
+# 验证cgroup v2 (必须!)
+mount | grep cgroup
+# 应该显示: cgroup on /sys/fs/cgroup type cgroup2
+
+# 如果不是cgroup v2，需要配置内核参数
+# 在/etc/default/grub中添加: systemd.unified_cgroup_hierarchy=1
+```
+
+**Docker配置要求**
+```bash
+# 验证Docker cgroup配置
+docker system info | grep -E "(Cgroup|Version)"
+# 必须显示:
+# - Cgroup Driver: cgroupfs
+# - Cgroup Version: 2
+```
 
 ### 域名配置
 
@@ -41,35 +68,134 @@ sudo firewall-cmd --permanent --add-port=22/tcp
 sudo firewall-cmd --reload
 ```
 
+## 🚀 阿里云ECS部署配置
+
+### 推荐的阿里云ECS实例配置
+
+**实例规格建议:**
+- **实例类型**: ecs.c6.xlarge 或更高
+- **CPU**: 4核心
+- **内存**: 16GB
+- **系统盘**: 40GB SSD
+- **数据盘**: 20GB SSD
+- **操作系统**: Ubuntu 22.04.5 LTS
+- **网络**: VPC网络，分配公网IP
+
+**安全组配置:**
+```bash
+# 入站规则
+80/tcp    0.0.0.0/0    HTTP访问
+443/tcp   0.0.0.0/0    HTTPS访问
+22/tcp    您的IP       SSH管理
+8080/tcp  内网         cAdvisor监控 (可选)
+9090/tcp  内网         Prometheus监控 (可选)
+3000/tcp  内网         Grafana监控 (可选)
+```
+
 ## 🚀 部署方法
 
-### 方法1: 一键部署（推荐）
+### 方法1: 快速部署（推荐）
 
 ```bash
 # 1. 克隆项目
 git clone https://github.com/lijh1983/ssl_cert_manager_delivery.git
 cd ssl_cert_manager_delivery
 
-# 2. 执行一键部署
-./deploy.sh --quick
+# 2. 一键环境初始化和部署
+./scripts/deploy-production.sh
 ```
 
-### 方法2: 手动部署
+### 方法2: 手动部署（详细步骤）
 
-#### 步骤1: 安装Docker
+#### 步骤1: 系统环境初始化
 
+**1.1 系统更新和基础软件安装**
 ```bash
-# Ubuntu/Debian
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-sudo usermod -aG docker $USER
+# 更新系统
+sudo apt update && sudo apt upgrade -y
 
-# 重新登录或执行
+# 安装必要软件
+sudo apt install -y curl wget git vim htop net-tools jq
+
+# 配置时区
+sudo timedatectl set-timezone Asia/Shanghai
+```
+
+**1.2 验证cgroup v2支持**
+```bash
+# 检查cgroup版本 (关键!)
+mount | grep cgroup
+# 必须显示: cgroup on /sys/fs/cgroup type cgroup2
+
+# 如果不是cgroup v2，需要配置
+if ! mount | grep -q "cgroup2"; then
+    echo "配置cgroup v2支持..."
+    sudo sed -i 's/GRUB_CMDLINE_LINUX=""/GRUB_CMDLINE_LINUX="systemd.unified_cgroup_hierarchy=1"/' /etc/default/grub
+    sudo update-grub
+    echo "需要重启系统以启用cgroup v2"
+    # sudo reboot
+fi
+```
+
+**1.3 安装Docker (版本26.1.3+)**
+```bash
+# 卸载旧版本
+sudo apt remove -y docker docker-engine docker.io containerd runc
+
+# 安装依赖
+sudo apt install -y ca-certificates curl gnupg lsb-release
+
+# 添加Docker官方GPG密钥
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+
+# 添加Docker仓库
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# 安装Docker
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+
+# 配置用户权限
+sudo usermod -aG docker $USER
 newgrp docker
 
 # 验证安装
-docker --version
-docker-compose --version
+docker --version  # 应该 >= 26.1.3
+docker compose version  # 应该 >= v2.24.0
+
+# 验证cgroup v2支持
+docker system info | grep -E "(Cgroup|Version)"
+# 必须显示: Cgroup Version: 2
+```
+
+**1.4 Docker配置优化**
+```bash
+# 创建Docker配置文件
+sudo mkdir -p /etc/docker
+cat > /tmp/daemon.json <<EOF
+{
+  "exec-opts": ["native.cgroupdriver=cgroupfs"],
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "100m",
+    "max-file": "3"
+  },
+  "storage-driver": "overlay2",
+  "registry-mirrors": [
+    "https://registry.cn-hangzhou.aliyuncs.com",
+    "https://mirror.ccs.tencentyun.com"
+  ]
+}
+EOF
+sudo mv /tmp/daemon.json /etc/docker/daemon.json
+
+# 重启Docker服务
+sudo systemctl restart docker
+sudo systemctl enable docker
+
+# 验证配置
+docker system info | grep -E "(Storage|Cgroup|Registry)"
 ```
 
 #### 步骤2: 克隆项目
@@ -81,6 +207,8 @@ cd ssl_cert_manager_delivery
 
 #### 步骤3: 配置环境变量
 
+**完整的.env配置文件 (基于生产环境验证)**
+
 ```bash
 cat > .env <<EOF
 # 基础配置
@@ -88,15 +216,15 @@ DOMAIN_NAME=ssl.gzyggl.com
 EMAIL=19822088@qq.com
 ENVIRONMENT=production
 
-# 数据库配置
+# 数据库配置 (注意: 端口号必须使用字符串格式)
 DB_NAME=ssl_manager
 DB_USER=ssl_user
 DB_PASSWORD=$(openssl rand -base64 32)
-DB_PORT=5432
+DB_PORT="5432"
 
-# Redis配置
+# Redis配置 (注意: 端口号必须使用字符串格式)
 REDIS_PASSWORD=$(openssl rand -base64 32)
-REDIS_PORT=6379
+REDIS_PORT="6379"
 
 # 安全配置
 SECRET_KEY=$(openssl rand -base64 32)
@@ -115,8 +243,20 @@ PROMETHEUS_PORT=9090
 # 功能开关
 ENABLE_METRICS=true
 ENABLE_MONITORING=true
+
+# Let's Encrypt SSL证书配置 (新增 - 避免环境变量警告)
+ACME_EMAIL=19822088@qq.com
+ACME_DIRECTORY_URL=https://acme-v02.api.letsencrypt.org/directory
+# 测试环境可使用: https://acme-staging-v02.api.letsencrypt.org/directory
+ACME_AGREE_TOS=true
+ACME_CHALLENGE_TYPE=http-01
 EOF
 ```
+
+**环境变量说明:**
+- `DB_PORT` 和 `REDIS_PORT`: 必须使用字符串格式，避免Docker Compose解析错误
+- `ACME_*`: SSL证书自动申请配置，避免启动时的环境变量警告
+- `ACME_DIRECTORY_URL`: 生产环境使用正式API，测试时可切换到staging环境
 
 #### 步骤4: 构建基础镜像
 
@@ -139,83 +279,164 @@ docker-compose -f docker-compose.aliyun.yml --profile monitoring up -d
 docker-compose -f docker-compose.aliyun.yml up -d
 ```
 
-**生产环境部署:**
+**步骤5: 生产环境部署**
+
+**5.1 创建数据目录结构**
 ```bash
-# 创建必要的目录
+# 创建生产环境目录结构
 sudo mkdir -p /opt/ssl-manager/{data,logs,certs,backups}
 sudo mkdir -p /opt/ssl-manager/data/{postgres,redis,prometheus,grafana}
-sudo chown -R $USER:$USER /opt/ssl-manager
 
-# 启动生产环境（包含完整监控栈）
+# 设置正确的权限 (关键!)
+sudo chown -R $USER:$USER /opt/ssl-manager
+sudo chown -R 70:70 /opt/ssl-manager/data/postgres      # PostgreSQL用户
+sudo chown -R 472:472 /opt/ssl-manager/data/grafana     # Grafana用户
+sudo chown -R 65534:65534 /opt/ssl-manager/data/prometheus  # Prometheus用户
+sudo chown -R 999:999 /opt/ssl-manager/data/redis       # Redis用户
+
+# 验证目录结构
+ls -la /opt/ssl-manager/
+ls -la /opt/ssl-manager/data/
+```
+
+**5.2 启动生产环境服务**
+```bash
+# 启动完整生产环境（包含监控栈）
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring up -d
 
-# 或仅启动核心服务
+# 或仅启动核心服务（不包含监控）
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production up -d
+
+# 查看启动状态
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring ps
+```
+
+**5.3 等待服务启动完成**
+```bash
+# 等待所有服务健康检查通过
+echo "等待服务启动..."
+sleep 60
+
+# 检查服务状态
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring ps
+
+# 应该看到所有服务状态为 "healthy" 或 "Up"
 ```
 
 ## ✅ 部署验证
 
-### 检查服务状态
+### 完整的生产环境验证清单
 
+**1. 服务状态验证**
 ```bash
-# 查看所有服务状态
-docker-compose -f docker-compose.aliyun.yml ps
-
-# 检查服务健康状态
-docker-compose -f docker-compose.aliyun.yml ps | grep "healthy\|Up"
-```
-
-### 验证数据库连接
-
-```bash
-# 测试PostgreSQL连接
-docker exec ssl-manager-postgres pg_isready -U ssl_user -d ssl_manager
-
-# 查看数据库表
-docker exec ssl-manager-postgres psql -U ssl_user -d ssl_manager -c "\dt"
-```
-
-### 测试Web访问
-
-```bash
-# 测试本地访问
-curl -I http://localhost
-
-# 测试域名访问
-curl -I http://ssl.gzyggl.com
-```
-
-### 验证API接口
-
-```bash
-# 测试API健康检查
-curl http://ssl.gzyggl.com/api/health
-
-# 查看API文档
-curl http://ssl.gzyggl.com/api/docs
-```
-
-### 生产环境验证
-
-```bash
-# 检查所有服务状态
+# 检查所有服务状态 (应该有9个服务)
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring ps
 
-# 验证核心服务健康状态
-curl -f http://localhost/health                    # Nginx健康检查
-curl -f http://localhost/api/health                # 后端API健康检查
-curl -I http://localhost/                          # 前端页面访问
-curl -I http://localhost/prometheus/               # Prometheus监控
-curl -I http://localhost/grafana/                  # Grafana面板
+# 预期结果: 所有服务状态为 "healthy" 或 "Up"
+# - ssl-manager-postgres: healthy
+# - ssl-manager-redis: healthy
+# - ssl-manager-backend: healthy
+# - ssl-manager-frontend: healthy
+# - ssl-manager-nginx: healthy
+# - ssl-manager-prometheus: Up
+# - ssl-manager-grafana: Up
+# - ssl-manager-node-exporter: Up
+# - ssl-manager-cadvisor: healthy
+```
 
-# 验证数据库连接
+**2. 核心功能验证**
+```bash
+# Nginx反向代理健康检查
+curl -f http://localhost/health
+# 预期: "nginx-proxy healthy"
+
+# 后端API健康检查
+curl -f http://localhost/api/health
+# 预期: {"database":"connected","status":"healthy","timestamp":"..."}
+
+# 前端页面访问
+curl -I http://localhost/
+# 预期: HTTP/1.1 200 OK
+
+# 数据库连接验证
 docker exec ssl-manager-postgres psql -U ssl_user -d ssl_manager -c "SELECT 1;"
+# 预期: 返回 "1"
 
-# 验证Redis连接
+# Redis连接验证
 docker exec ssl-manager-redis redis-cli ping
+# 预期: "PONG"
+```
 
-# 检查监控指标
+**3. 监控系统验证**
+```bash
+# Prometheus监控面板
+curl -f http://localhost/prometheus/
+# 预期: 重定向到 /graph
+
+# Grafana可视化面板
+curl -I http://localhost/grafana/
+# 预期: HTTP/1.1 302 Found, Location: /grafana/login
+
+# cAdvisor容器监控 (关键验证!)
+curl -f http://localhost:8080/metrics | head -5
+# 预期: 返回监控指标数据
+
+# Node Exporter系统监控
+curl -f http://localhost:9100/metrics | head -5
+# 预期: 返回系统监控指标
+
+# Prometheus targets状态
 curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {job: .labels.job, health: .health}'
+# 预期: 所有target状态为 "up"
+```
+
+**4. 数据持久化验证**
+```bash
+# 验证数据目录挂载
+ls -la /opt/ssl-manager/data/
+# 预期: 看到 postgres, redis, prometheus, grafana 目录
+
+# 验证数据库数据持久化
+docker exec ssl-manager-postgres psql -U ssl_user -d ssl_manager -c "\dt"
+# 预期: 显示数据库表结构
+
+# 验证权限设置
+ls -la /opt/ssl-manager/data/postgres/ | head -3
+# 预期: 所有者为 70:70 (postgres用户)
+
+ls -la /opt/ssl-manager/data/grafana/ | head -3
+# 预期: 所有者为 472:472 (grafana用户)
+```
+
+**5. 网络和安全验证**
+```bash
+# 验证端口监听
+netstat -tlnp | grep -E ":80|:443|:8080|:9090|:3000"
+# 预期: 看到相应端口被Docker进程监听
+
+# 验证防火墙配置 (如果启用)
+sudo ufw status
+# 或
+sudo iptables -L | grep -E "80|443"
+
+# 验证域名解析 (如果配置了域名)
+nslookup ssl.gzyggl.com
+# 预期: 解析到服务器IP
+```
+
+**6. 性能和资源验证**
+```bash
+# 检查系统资源使用
+free -h
+# 预期: 内存使用合理，有足够可用内存
+
+# 检查Docker容器资源使用
+docker stats --no-stream
+# 预期: 各容器CPU和内存使用正常
+
+# 检查磁盘空间
+df -h
+# 预期: 有足够的磁盘空间
 ```
 
 ## 🔧 服务管理
