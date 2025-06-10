@@ -74,12 +74,9 @@ scrape_configs:
     scrape_interval: 15s
     scrape_timeout: 10s
 
-  # Docker容器监控
-  - job_name: 'cadvisor'
-    static_configs:
-      - targets: ['cadvisor:8080']
-    scrape_interval: 30s
-    scrape_timeout: 10s
+  # Docker容器监控 (cAdvisor已移除)
+  # 原因: cgroup v2兼容性问题
+  # 替代方案: 使用docker stats和node-exporter进行基础监控
 
   # SSL证书过期监控
   - job_name: 'ssl-cert-exporter'

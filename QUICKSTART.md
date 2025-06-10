@@ -46,7 +46,7 @@ curl -I http://localhost/             # 前端页面
 | API文档 | http://localhost/api/docs | Swagger API文档 |
 | Prometheus | http://localhost/prometheus/ | 监控数据收集 |
 | Grafana | http://localhost/grafana/ | 可视化监控面板 |
-| cAdvisor | http://localhost:8080/ | 容器监控 |
+| ~~cAdvisor~~ | ~~http://localhost:8080/~~ | ~~容器监控~~ (已移除) |
 
 ### 默认登录信息
 
@@ -117,16 +117,20 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs [service_na
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring up -d --force-recreate
 ```
 
-**2. cAdvisor无法启动**
+**2. 容器监控问题**
 ```bash
-# 检查cgroup v2支持
-mount | grep cgroup
-# 必须显示: cgroup on /sys/fs/cgroup type cgroup2
+# cAdvisor已移除，使用以下替代方案:
 
-# 如果不支持，配置cgroup v2
-sudo sed -i 's/GRUB_CMDLINE_LINUX=""/GRUB_CMDLINE_LINUX="systemd.unified_cgroup_hierarchy=1"/' /etc/default/grub
-sudo update-grub
-sudo reboot
+# 查看容器资源使用情况
+docker stats --no-stream
+
+# 查看容器状态和日志
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml ps
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs
+
+# 使用Prometheus和node-exporter监控
+curl http://localhost:9090/targets
+curl http://localhost:9100/metrics
 ```
 
 **3. 数据库连接失败**

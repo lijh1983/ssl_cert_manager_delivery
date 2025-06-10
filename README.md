@@ -62,7 +62,7 @@ docker-compose -f docker-compose.aliyun.yml --profile monitoring up -d
 - **网络**: 需要访问互联网
 
 ### 关键要求
-- ⚠️ **cgroup v2支持**: 必须启用，用于cAdvisor容器监控
+- ⚠️ **cgroup v2支持**: 建议启用，用于系统监控兼容性
 - ⚠️ **端口号格式**: 环境变量中端口号必须使用字符串格式
 
 ## 🌐 服务访问地址
@@ -76,7 +76,7 @@ docker-compose -f docker-compose.aliyun.yml --profile monitoring up -d
 | API文档 | http://localhost/api/docs | Swagger API文档 |
 | Prometheus | http://localhost/prometheus/ | 监控数据收集 |
 | Grafana | http://localhost/grafana/ | 可视化监控面板 |
-| cAdvisor | http://localhost:8080/ | 容器监控 |
+| ~~cAdvisor~~ | ~~http://localhost:8080/~~ | ~~容器监控~~ (已移除) |
 
 ## 🔑 默认登录信息
 

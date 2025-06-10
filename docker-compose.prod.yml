@@ -233,32 +233,9 @@ services:
           # memory: 128M
           # cpus: '0.25'
 
-  cadvisor:
-    # 使用支持cgroup v2的最新版本
-    image: gcr.io/cadvisor/cadvisor:v0.47.0
-    container_name: ssl-manager-cadvisor
-    restart: unless-stopped
-    privileged: true
-    devices:
-      - /dev/kmsg:/dev/kmsg
-    volumes:
-      - /:/rootfs:ro
-      - /var/run:/var/run:ro
-      - /sys:/sys:ro
-      - /var/lib/docker:/var/lib/docker:ro
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-    command:
-      - '--housekeeping_interval=10s'
-      - '--docker_only=true'
-      - '--store_container_labels=false'
-      - '--whitelisted_container_labels=io.kubernetes.container.name,io.kubernetes.pod.name,io.kubernetes.pod.namespace'
-    ports:
-      - "8080:8080"
-    # deploy:
-      # resources:
-        # limits:
-          # memory: 256M
-          # cpus: '0.5'
+  # cAdvisor容器监控服务已移除
+  # 原因: cgroup v2兼容性问题和资源占用考虑
+  # 替代方案: 使用node-exporter和docker stats进行基础监控
 
   # 备份服务
   backup:

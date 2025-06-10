@@ -87,7 +87,7 @@ sudo firewall-cmd --reload
 80/tcp    0.0.0.0/0    HTTP访问
 443/tcp   0.0.0.0/0    HTTPS访问
 22/tcp    您的IP       SSH管理
-8080/tcp  内网         cAdvisor监控 (可选)
+# 8080/tcp  内网         cAdvisor监控 (已移除)
 9090/tcp  内网         Prometheus监控 (可选)
 3000/tcp  内网         Grafana监控 (可选)
 ```
@@ -341,7 +341,7 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile produc
 # - ssl-manager-prometheus: Up
 # - ssl-manager-grafana: Up
 # - ssl-manager-node-exporter: Up
-# - ssl-manager-cadvisor: healthy
+# - ssl-manager-cadvisor: 已移除 (cgroup v2兼容性问题)
 ```
 
 **2. 核心功能验证**
@@ -377,9 +377,9 @@ curl -f http://localhost/prometheus/
 curl -I http://localhost/grafana/
 # 预期: HTTP/1.1 302 Found, Location: /grafana/login
 
-# cAdvisor容器监控 (关键验证!)
-curl -f http://localhost:8080/metrics | head -5
-# 预期: 返回监控指标数据
+# cAdvisor容器监控 (已移除)
+# 原因: cgroup v2兼容性问题
+# 替代方案: 使用docker stats进行基础容器监控
 
 # Node Exporter系统监控
 curl -f http://localhost:9100/metrics | head -5
@@ -411,8 +411,8 @@ ls -la /opt/ssl-manager/data/grafana/ | head -3
 **5. 网络和安全验证**
 ```bash
 # 验证端口监听
-netstat -tlnp | grep -E ":80|:443|:8080|:9090|:3000"
-# 预期: 看到相应端口被Docker进程监听
+netstat -tlnp | grep -E ":80|:443|:9090|:3000"
+# 预期: 看到相应端口被Docker进程监听 (8080端口已移除)
 
 # 验证防火墙配置 (如果启用)
 sudo ufw status
@@ -654,11 +654,9 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml restart nginx
 # 检查网络连接
 curl -I --connect-timeout 10 https://gcr.io/v2/
 
-# 使用Docker Hub替代gcr.io镜像
-# 在docker-compose.prod.yml中修改:
-# image: gcr.io/cadvisor/cadvisor:latest
-# 改为:
-# image: google/cadvisor:latest
+# cAdvisor已从配置中移除
+# 原因: cgroup v2兼容性问题和资源占用考虑
+# 替代方案: 使用docker stats和node-exporter进行监控
 
 # 使用阿里云镜像源（如果可用）
 # image: registry.cn-hangzhou.aliyuncs.com/google_containers/prometheus:v2.45.0
@@ -683,24 +681,24 @@ echo "ACME_CHALLENGE_TYPE=http-01" >> .env
 # ACME_DIRECTORY_URL=https://acme-staging-v02.api.letsencrypt.org/directory
 ```
 
-**cAdvisor容器监控问题**
+**容器监控替代方案**
 ```bash
-# 错误: Failed to create a Container Manager: mountpoint for cpu not found
-# 解决方案: 优化cAdvisor配置或暂时禁用
+# cAdvisor已移除，使用以下替代方案进行容器监控:
 
-# 方案1: 优化配置（在docker-compose.prod.yml中）
-volumes:
-  - /sys/fs/cgroup:/sys/fs/cgroup:ro
-command:
-  - '--housekeeping_interval=10s'
-  - '--docker_only=true'
+# 方案1: 使用docker stats查看容器资源使用
+docker stats --no-stream
 
-# 方案2: 暂时禁用cAdvisor
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml stop cadvisor
+# 方案2: 使用docker system查看系统信息
+docker system df
+docker system events
 
-# 检查其他监控服务是否正常
+# 方案3: 通过Prometheus和node-exporter监控系统资源
 curl http://localhost:9090/targets  # Prometheus targets
 curl http://localhost:9100/metrics  # Node Exporter metrics
+
+# 方案4: 查看容器日志和状态
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml ps
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml logs
 ```
 
 #### 6. 内存不足

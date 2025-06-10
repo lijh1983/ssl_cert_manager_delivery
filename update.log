@@ -701,4 +701,165 @@ main() {
 **问题解决状态**: ✅ 完全解决
 **脚本功能**: ✅ 智能化部署，配置保护，模块化执行
 **用户体验**: ✅ 显著提升，灵活可控，安全可靠
+
+### [2025-01-10 05:20-05:45] [PRODUCTION] [DOCKER] 移除cAdvisor容器监控服务
+**操作时长**: 25分钟
+**操作类型**: 服务移除、配置清理、文档同步更新
+**影响范围**: Docker Compose配置、监控配置、部署脚本、项目文档
+
+#### 移除原因和背景:
+
+**技术原因:**
+- **cgroup v2兼容性问题**: cAdvisor在cgroup v2环境下存在挂载点错误
+- **资源占用考虑**: cAdvisor需要特权模式运行，占用较多系统资源
+- **维护复杂性**: 需要复杂的卷挂载和特权配置，增加部署复杂度
+- **替代方案可用**: docker stats和node-exporter可提供基础监控功能
+
+**实际问题:**
+- 错误信息: `Failed to create a Container Manager: mountpoint for cpu not found`
+- 启动失败率高，影响整体部署成功率
+- 需要特殊的cgroup v2配置和权限设置
+
+#### 移除范围和操作:
+
+**1. Docker Compose配置清理 ✅**
+
+**docker-compose.prod.yml:**
+- 移除完整的cadvisor服务定义 (26行配置)
+- 移除端口映射 8080:8080
+- 移除特权模式和设备挂载配置
+- 移除复杂的卷挂载配置
+- 添加移除说明注释
+
+**2. 监控配置调整 ✅**
+
+**Prometheus配置更新:**
+- `monitoring/prometheus.yml`: 移除cadvisor job配置
+- `monitoring/prometheus-simple.yml`: 移除cadvisor target
+- 保留其他监控服务配置 (node-exporter, prometheus)
+- 添加替代方案说明注释
+
+**Grafana配置:**
+- 检查dashboards目录 (空目录，无需修改)
+- 确保其他监控面板不受影响
+
+**3. 部署脚本更新 ✅**
+
+**scripts/deploy-production.sh 关键修改:**
+- 更新cgroup v2检查逻辑: 从错误改为警告
+- 移除cAdvisor相关的强制退出条件
+- 更新服务数量验证: 从9个服务改为8个服务
+- 移除端口8080的冲突检查
+- 更新服务访问地址显示
+- 修改验证报告中的端口列表
+
+**具体修改点:**
+```bash
+# 服务数量验证
+if [[ $healthy_count -ge 6 ]]; then  # 从7改为6
+
+# 端口冲突检查
+local ports=(80 443 9090 3000)  # 移除8080
+
+# 网络端口检查
+netstat -tlnp | grep -E ":80|:443|:9090|:3000"  # 移除8080
+```
+
+**4. 文档同步更新 ✅**
+
+**DEPLOYMENT.md:**
+- 更新安全组配置，移除8080端口
+- 修改服务状态验证列表
+- 移除cAdvisor监控验证步骤
+- 更新故障排除章节，提供替代监控方案
+- 修改端口验证命令
+
+**README.md:**
+- 更新服务访问地址表，标记cAdvisor为已移除
+- 修改系统要求说明，cgroup v2从必须改为建议
+- 保持其他服务信息不变
+
+**QUICKSTART.md:**
+- 更新服务访问表
+- 修改故障排除指南，移除cAdvisor启动问题
+- 添加容器监控替代方案
+
+**SCRIPT_USAGE_EXAMPLES.md:**
+- 更新监控服务检查命令
+- 修改注意事项中的cgroup v2要求
+- 添加docker stats替代方案
+
+#### 替代监控方案:
+
+**1. 基础容器监控:**
+```bash
+# 实时容器资源监控
+docker stats --no-stream
+
+# 容器状态检查
+docker-compose ps
+
+# 系统资源监控
+docker system df
+docker system events
+```
+
+**2. Prometheus + Node Exporter:**
+```bash
+# 系统级监控指标
+curl http://localhost:9100/metrics
+
+# Prometheus监控目标
+curl http://localhost:9090/targets
+```
+
+**3. 日志监控:**
+```bash
+# 容器日志监控
+docker-compose logs -f
+docker logs [container_name]
+```
+
+#### 验证结果:
+
+**✅ 配置验证:**
+- Docker Compose配置语法正确
+- 服务列表从9个减少到8个
+- Prometheus配置无语法错误
+- 所有文档引用已更新
+
+**✅ 功能验证:**
+- 剩余8个服务可正常启动
+- 监控功能不受影响 (Prometheus + Grafana + Node Exporter)
+- 部署脚本验证逻辑正确
+- 替代监控方案可用
+
+**✅ 文档一致性:**
+- 所有文档中的cAdvisor引用已处理
+- 服务访问表已更新
+- 故障排除指南已修改
+- 端口配置说明已同步
+
+#### 影响评估:
+
+**正面影响:**
+- 简化部署配置，减少特权模式依赖
+- 提高部署成功率，避免cgroup v2兼容性问题
+- 降低系统资源占用
+- 减少维护复杂度
+
+**功能影响:**
+- 失去详细的容器级监控指标
+- 无法通过Web界面查看容器资源使用
+- 需要使用命令行工具进行容器监控
+
+**缓解措施:**
+- 提供docker stats等替代监控方案
+- 保留Prometheus和Node Exporter系统监控
+- 更新文档提供完整的监控指导
+- 部署脚本包含基础监控验证
+
+**问题解决状态**: ✅ 完全完成
+**服务架构**: ✅ 从9服务简化为8服务，监控功能保持
+**部署稳定性**: ✅ 显著提升，移除cgroup v2兼容性障碍
 ---

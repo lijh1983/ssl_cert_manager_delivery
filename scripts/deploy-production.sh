@@ -378,11 +378,11 @@ check_compatibility_issues() {
         issues_found=true
     fi
 
-    # 检查cgroup v2
+    # 检查cgroup v2 (cAdvisor已移除，但保留检查用于其他监控服务)
     if ! mount | grep -q "cgroup2"; then
-        log_error "系统不支持cgroup v2！这是运行cAdvisor的必要条件"
-        log_info "解决方案: 在/etc/default/grub中添加: systemd.unified_cgroup_hierarchy=1"
-        issues_found=true
+        log_warning "系统不支持cgroup v2，部分监控功能可能受限"
+        log_info "建议: 在/etc/default/grub中添加: systemd.unified_cgroup_hierarchy=1"
+        # 不再作为错误，因为cAdvisor已移除
     fi
 
     # 检查Docker版本
@@ -443,18 +443,18 @@ check_system_requirements() {
     log_success "系统要求检查通过"
 }
 
-# 检查cgroup v2支持
+# 检查cgroup v2支持 (cAdvisor已移除，保留检查用于系统兼容性)
 check_cgroup_v2() {
     log_info "检查cgroup v2支持..."
-    
+
     if ! mount | grep -q "cgroup2"; then
-        log_error "系统不支持cgroup v2！这是运行cAdvisor的必要条件"
-        log_info "请在/etc/default/grub中添加: systemd.unified_cgroup_hierarchy=1"
+        log_warning "系统不支持cgroup v2，部分监控功能可能受限"
+        log_info "建议: 在/etc/default/grub中添加: systemd.unified_cgroup_hierarchy=1"
         log_info "然后执行: sudo update-grub && sudo reboot"
-        exit 1
+        # 不再强制退出，因为cAdvisor已移除
+    else
+        log_success "cgroup v2支持检查通过"
     fi
-    
-    log_success "cgroup v2支持检查通过"
 }
 
 # 智能Docker安装
@@ -548,14 +548,10 @@ verify_docker_installation() {
     local compose_version=$(docker compose version | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1)
     log_info "Docker Compose版本: $compose_version"
 
-    # 验证cgroup v2支持
+    # 验证cgroup v2支持 (cAdvisor已移除，保留检查用于系统兼容性)
     if ! docker system info | grep -q "Cgroup Version: 2"; then
-        log_warning "Docker不支持cgroup v2，cAdvisor可能无法正常工作"
-        if [[ "$INTERACTIVE_MODE" == "true" ]]; then
-            if ! confirm_action "是否继续部署？"; then
-                exit 1
-            fi
-        fi
+        log_warning "Docker不支持cgroup v2，部分监控功能可能受限"
+        # 不再强制确认，因为cAdvisor已移除
     else
         log_success "Docker cgroup v2支持验证通过"
     fi
@@ -851,7 +847,7 @@ start_services() {
 check_port_conflicts() {
     log_info "检查端口冲突..."
 
-    local ports=(80 443 8080 9090 3000)
+    local ports=(80 443 9090 3000)  # 移除8080端口(cAdvisor已移除)
     local conflicts=()
 
     for port in "${ports[@]}"; do
@@ -915,7 +911,7 @@ wait_for_services() {
 
         log_debug "服务状态: $healthy_count/$total_count 健康"
 
-        if [[ $healthy_count -ge 7 ]]; then  # 至少7个服务健康
+        if [[ $healthy_count -ge 6 ]]; then  # 至少6个服务健康 (cAdvisor已移除)
             log_success "服务启动完成"
             return 0
         fi
@@ -1032,7 +1028,7 @@ generate_verification_report() {
         echo ""
 
         echo "=== 网络端口 ==="
-        netstat -tlnp | grep -E ":80|:443|:8080|:9090|:3000"
+        netstat -tlnp | grep -E ":80|:443|:9090|:3000"  # 移除8080端口(cAdvisor已移除)
         echo ""
 
     } > "$report_file"
@@ -1049,7 +1045,7 @@ show_deployment_info() {
     echo "  API接口: http://localhost/api/"
     echo "  Prometheus: http://localhost/prometheus/"
     echo "  Grafana: http://localhost/grafana/"
-    echo "  cAdvisor: http://localhost:8080/"
+    echo "  # cAdvisor已移除 (原因: cgroup v2兼容性问题)"
     echo ""
     echo "管理命令:"
     echo "  查看服务状态: docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production --profile monitoring ps"
@@ -1147,7 +1143,7 @@ show_deployment_info() {
     echo "  API文档: http://localhost/api/docs"
     echo "  Prometheus: http://localhost/prometheus/"
     echo "  Grafana: http://localhost/grafana/"
-    echo "  cAdvisor: http://localhost:8080/"
+    echo "  # cAdvisor已移除 (原因: cgroup v2兼容性问题)"
     echo ""
     echo "🔑 登录信息:"
     if [[ -f "$ENV_FILE" ]]; then
