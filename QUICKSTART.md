@@ -1,6 +1,6 @@
 # SSL证书管理器快速开始指南
 
-本指南提供SSL证书管理器的快速部署方法，适用于生产环境。
+本指南提供SSL证书管理器的快速部署方法，5分钟体验四大核心功能模块：检测开关控制、域名监控、端口监控和证书操作。
 
 ## 🚀 一键部署（推荐）
 
@@ -91,14 +91,66 @@ docker exec ssl-manager-postgres psql -U ssl_user -d ssl_manager -c "\dt"
 docker exec ssl-manager-redis redis-cli ping
 ```
 
-### SSL证书监控检查
+### 🎯 四大核心功能体验
+
+#### 1. 检测开关控制系统
+```bash
+# 查看证书监控配置
+curl -f http://localhost/api/v1/certificates/1/monitoring-config
+
+# 更新监控配置
+curl -X PUT http://localhost/api/v1/certificates/1/monitoring-config \
+  -H "Content-Type: application/json" \
+  -d '{"monitoring_enabled": true, "check_frequency": "daily"}'
+```
+
+#### 2. 域名监控功能
+```bash
+# 手动触发域名检查
+curl -X POST http://localhost/api/v1/certificates/1/domain-check \
+  -H "Content-Type: application/json" \
+  -d '{"check_types": ["dns", "reachability"]}'
+
+# 查看域名监控历史
+curl -f http://localhost/api/v1/certificates/1/domain-monitoring-history
+```
+
+#### 3. 端口监控系统
+```bash
+# 手动触发端口检查
+curl -X POST http://localhost/api/v1/certificates/1/port-check \
+  -H "Content-Type: application/json" \
+  -d '{"check_types": ["ssl"], "ports": [443, 8443]}'
+
+# 获取TLS安全评估
+curl -f http://localhost/api/v1/certificates/1/tls-assessment
+```
+
+#### 4. 证书操作功能
+```bash
+# 手动触发证书检测
+curl -X POST http://localhost/api/v1/certificates/1/manual-check \
+  -H "Content-Type: application/json" \
+  -d '{"check_types": ["domain", "port", "ssl"]}'
+
+# 导出证书数据
+curl -f http://localhost/api/v1/certificates/export > certificates.csv
+
+# 查看操作历史
+curl -f http://localhost/api/v1/certificates/1/operation-history
+```
+
+### SSL证书管理检查
 
 ```bash
 # 检查SSL证书管理API
-curl -f http://localhost/api/certificates/status
+curl -f http://localhost/api/v1/certificates
 
-# 检查证书到期情况
-curl -f http://localhost/api/certificates/expiry
+# 检查证书状态
+curl -f http://localhost/api/v1/certificates/status
+
+# 检查系统健康状态
+curl -f http://localhost/health
 
 # 检查容器资源使用
 docker stats --no-stream
