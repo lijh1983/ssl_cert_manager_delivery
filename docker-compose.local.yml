@@ -1,10 +1,8 @@
-# SSL证书管理系统 - Docker Compose配置
+# SSL证书管理系统 - 本地部署配置
+# 使用预构建镜像，专为本地开发/测试环境优化
+# 使用方式: docker-compose -f docker-compose.local.yml up -d
 
-# 网络配置 - 使用默认网络避免冲突
-#     driver: bridge
-#     ipam:
-#       config:
-#         - subnet: 10.10.10.0/24
+version: '3.8'
 
 # 数据卷配置
 volumes:
@@ -18,9 +16,11 @@ volumes:
     driver: local
   nginx_logs:
     driver: local
-  # 系统监控数据卷已移除 (专注SSL证书管理核心功能)
-  # prometheus_data: 已移除
-  # grafana_data: 已移除
+
+# 网络配置
+networks:
+  ssl-manager-network:
+    driver: bridge
 
 services:
   # PostgreSQL数据库
@@ -35,14 +35,17 @@ services:
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./database/init:/docker-entrypoint-initdb.d
+      - ./database/init:/docker-entrypoint-initdb.d:ro
     ports:
       - "${DB_PORT:-5432}:5432"
+    networks:
+      - ssl-manager-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-ssl_user} -d ${DB_NAME:-ssl_manager}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
     logging:
       driver: "json-file"
       options:
@@ -59,8 +62,10 @@ services:
       - redis_data:/data
     ports:
       - "${REDIS_PORT:-6379}:6379"
+    networks:
+      - ssl-manager-network
     healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_password}", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -76,7 +81,7 @@ services:
     container_name: ssl-manager-backend
     restart: unless-stopped
     environment:
-      ENVIRONMENT: ${ENVIRONMENT:-production}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       WORKERS: ${BACKEND_WORKERS:-2}
       
@@ -93,30 +98,34 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_password}
       
       # 安全配置
-      SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-jwt-secret-key}
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-jwt-secret-key}
       
       # SSL配置
       SSL_CERT_PATH: /app/certs
-      ACME_DIRECTORY_URL: ${ACME_DIRECTORY_URL:-https://acme-v02.api.letsencrypt.org/directory}
+      ACME_DIRECTORY_URL: ${ACME_DIRECTORY_URL:-https://acme-staging-v02.api.letsencrypt.org/directory}
       
       # 监控配置
       ENABLE_METRICS: ${ENABLE_METRICS:-true}
       METRICS_PORT: 9090
+      
+      # 开发配置
+      DEBUG: ${DEBUG:-false}
+      ENABLE_CORS: ${ENABLE_CORS:-true}
     volumes:
       - ssl_certs:/app/certs
       - app_logs:/app/logs
-      - ./backend/config:/app/config:ro
     ports:
       - "${BACKEND_PORT:-8000}:8000"
-      # 监控端口已移除，专注SSL证书管理功能
+    networks:
+      - ssl-manager-network
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "/usr/local/bin/health-check.sh"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -132,78 +141,56 @@ services:
     image: ssl-manager-frontend:latest
     container_name: ssl-manager-frontend
     restart: unless-stopped
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
     volumes:
       - nginx_logs:/var/log/nginx
-    # ports:
-    #   - "${FRONTEND_PORT:-80}:80"
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    networks:
+      - ssl-manager-network
     depends_on:
       - backend
     healthcheck:
-      test: ["CMD", "/usr/local/bin/health-check.sh"]
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 30s
       timeout: 3s
       retries: 3
-      start_period: 5s
+      start_period: 10s
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
 
-  # Nginx反向代理（生产环境）
+  # Nginx反向代理
   nginx:
     image: ssl-manager-nginx-proxy:latest
     container_name: ssl-manager-nginx
     restart: unless-stopped
+    environment:
+      DOMAIN_NAME: ${DOMAIN_NAME:-localhost}
     volumes:
       - nginx_logs:/var/log/nginx
       - ssl_certs:/var/www/ssl-certs:ro
     ports:
       - "${HTTP_PORT:-80}:80"
       - "${HTTPS_PORT:-443}:443"
+    networks:
+      - ssl-manager-network
     depends_on:
-      - frontend
-      - backend
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "/usr/local/bin/health-check.sh"]
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 30s
       timeout: 3s
       retries: 3
+      start_period: 15s
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-    profiles:
-      - production
-
-  # 系统监控服务已移除 (专注SSL证书管理核心功能)
-  # SSL证书管理系统内置以下证书监控功能:
-  # - 主机域名监控：监控证书绑定的域名状态
-  # - 证书等级检查：DV、OV、EV证书类型识别
-  # - 加密方式验证：RSA、ECC等加密算法检查
-  # - 端口监控：443、80等端口的证书状态
-  # - IP类型识别：IPv4/IPv6支持检查
-  # - IP地址监控：证书绑定IP的可达性
-  # - 证书状态跟踪：有效、过期、即将过期状态
-  # - 有效期管理：剩余天数计算和到期提醒
-  # - 检测开关控制：启用/禁用特定证书的监控
-  # - 备注信息管理：证书相关的备注和标签
-  # - 操作功能：证书检测、编辑、删除等管理操作
-
-  # 日志收集器（可选）
-  fluentd:
-    image: fluent/fluentd:v1.16-debian-1
-    container_name: ssl-manager-fluentd
-    restart: unless-stopped
-    volumes:
-      - ./logging/fluentd.conf:/fluentd/etc/fluent.conf:ro
-      - app_logs:/var/log/app:ro
-      - nginx_logs:/var/log/nginx:ro
-    ports:
-      - "${FLUENTD_PORT:-24224}:24224"
-    profiles:
-      - logging
-
-# 开发环境覆盖配置
-# 使用: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
