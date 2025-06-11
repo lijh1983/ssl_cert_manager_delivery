@@ -60,7 +60,9 @@ RUN echo '#!/bin/bash' > /usr/local/bin/start.sh && \
     echo 'python -c "from src.models.database_postgres import test_postgres_connection; exit(0 if test_postgres_connection() else 1)"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# 启动应用' >> /usr/local/bin/start.sh && \
-    echo 'echo "Starting application..."' >> /usr/local/bin/start.sh &&     echo 'cd /app/src' >> /usr/local/bin/start.sh &&     echo 'export PYTHONPATH=/app/src:$PYTHONPATH' >> /usr/local/bin/start.sh && \
+    echo 'echo "Starting application..."' >> /usr/local/bin/start.sh && \
+    echo 'cd /app/src' >> /usr/local/bin/start.sh && \
+    echo 'export PYTHONPATH=/app/src:$PYTHONPATH' >> /usr/local/bin/start.sh && \
     echo 'exec gunicorn --bind 0.0.0.0:8000 --workers ${WORKERS:-2} --worker-class sync --timeout 120 --max-requests 1000 --max-requests-jitter 100 --preload simple_app:app' >> /usr/local/bin/start.sh && \
     chmod +x /usr/local/bin/start.sh
 

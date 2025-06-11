@@ -82,8 +82,8 @@ numpy==1.24.3
 # DNS Resolution (already included above but ensuring it's available)
 # dnspython==2.4.2 (already included)
 
-# IP Range Checking
-ip-range-check==0.2.0
+# IP Range Checking (using built-in ipaddress module)
+# ipaddress is part of Python standard library since 3.3
 
 # Additional SSL/TLS Support
 certifi==2023.7.22
