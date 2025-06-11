@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSL证书管理系统 - 前端模拟服务</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        .status {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        .success {
+            background: rgba(76, 175, 80, 0.3);
+            border-left: 4px solid #4CAF50;
+        }
+        .info {
+            background: rgba(33, 150, 243, 0.3);
+            border-left: 4px solid #2196F3;
+        }
+        .api-test {
+            margin: 20px 0;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        #api-result {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 10px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔒 SSL证书管理系统</h1>
+        <h2>前端模拟服务</h2>
+        
+        <div class="status success">
+            <h3>✅ 前端服务状态</h3>
+            <p><strong>状态:</strong> 运行正常</p>
+            <p><strong>端口:</strong> 80 (容器内)</p>
+            <p><strong>访问地址:</strong> http://localhost:3000</p>
+            <p><strong>时间:</strong> <span id="current-time"></span></p>
+        </div>
+
+        <div class="status info">
+            <h3>📋 服务信息</h3>
+            <p><strong>服务名称:</strong> ssl-manager-frontend-mock</p>
+            <p><strong>容器类型:</strong> nginx:alpine</p>
+            <p><strong>用途:</strong> 测试 Nginx 代理配置</p>
+        </div>
+
+        <div class="api-test">
+            <h3>🔗 API 连接测试</h3>
+            <button onclick="testAPI('/api/health')">测试后端健康检查</button>
+            <button onclick="testAPI('/health')">测试 Nginx 健康检查</button>
+            <button onclick="testAPI('/api/certificates')">测试证书 API</button>
+            <div id="api-result"></div>
+        </div>
+
+        <div class="status info">
+            <h3>🛠️ 开发说明</h3>
+            <ul>
+                <li>这是一个用于测试 Nginx 代理配置的模拟前端服务</li>
+                <li>实际的前端应用应该通过 Nginx 代理访问</li>
+                <li>代理地址: http://localhost:8080</li>
+                <li>HTTPS 代理: https://localhost:8443</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // 更新当前时间
+        function updateTime() {
+            document.getElementById('current-time').textContent = new Date().toLocaleString('zh-CN');
+        }
+        updateTime();
+        setInterval(updateTime, 1000);
+
+        // API 测试函数
+        async function testAPI(endpoint) {
+            const resultDiv = document.getElementById('api-result');
+            resultDiv.textContent = `正在测试 ${endpoint}...`;
+            
+            try {
+                const response = await fetch(endpoint);
+                const text = await response.text();
+                resultDiv.textContent = `${endpoint} 响应:\n状态: ${response.status}\n内容: ${text}`;
+            } catch (error) {
+                resultDiv.textContent = `${endpoint} 错误:\n${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>

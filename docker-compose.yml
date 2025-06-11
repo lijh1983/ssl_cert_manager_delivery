@@ -161,13 +161,10 @@ services:
 
   # Nginx反向代理（生产环境）
   nginx:
-    image: nginx:1.24-alpine
+    image: ssl-manager-nginx-proxy:latest
     container_name: ssl-manager-nginx
     restart: unless-stopped
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
       - nginx_logs:/var/log/nginx
       - ssl_certs:/var/www/ssl-certs:ro
     ports:
@@ -177,7 +174,7 @@ services:
       - frontend
       - backend
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      test: ["CMD", "/usr/local/bin/health-check.sh"]
       interval: 30s
       timeout: 3s
       retries: 3

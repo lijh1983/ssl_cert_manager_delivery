@@ -1,0 +1,19 @@
+{
+  "status": "healthy",
+  "service": "ssl-manager-backend-mock",
+  "timestamp": "2024-01-01T00:00:00Z",
+  "version": "1.0.0-mock",
+  "database": {
+    "status": "connected",
+    "type": "mock"
+  },
+  "redis": {
+    "status": "connected",
+    "type": "mock"
+  },
+  "ssl_certificates": {
+    "total": 0,
+    "active": 0,
+    "expiring_soon": 0
+  }
+}
