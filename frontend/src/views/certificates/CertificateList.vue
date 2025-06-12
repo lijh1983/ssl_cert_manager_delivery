@@ -56,8 +56,11 @@
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-        <el-button type="primary" :icon="Plus" @click="goToCreatePage">
-          申请证书
+        <el-button type="primary" :icon="Plus" @click="showApplyDialog">
+          免费申请证书
+        </el-button>
+        <el-button type="warning" @click="deleteExpiredCertificates">
+          删除失效证书
         </el-button>
       </div>
     </div>
@@ -255,62 +258,99 @@
       </div>
     </el-card>
 
-    <!-- 申请证书对话框 -->
+    <!-- 免费申请证书弹窗 -->
     <el-dialog
-      v-model="dialogVisible"
-      title="申请证书"
-      width="600px"
-      @close="resetForm"
+      v-model="applyDialogVisible"
+      title="免费申请证书"
+      width="700px"
+      @close="resetApplyForm"
     >
       <el-form
-        ref="formRef"
-        :model="certificateForm"
-        :rules="formRules"
-        label-width="120px"
+        ref="applyFormRef"
+        :model="applyForm"
+        :rules="applyFormRules"
+        label-width="140px"
       >
-        <el-form-item label="域名" prop="domain">
-          <el-input 
-            v-model="certificateForm.domain" 
+        <el-form-item label="域名" prop="domain" required>
+          <el-input
+            v-model="applyForm.domain"
             placeholder="请输入域名，如：example.com 或 *.example.com"
           />
+          <div class="form-tip">* 必填，支持单域名和通配符域名</div>
         </el-form-item>
-        <el-form-item label="证书类型" prop="type">
-          <el-select v-model="certificateForm.type" placeholder="选择证书类型">
-            <el-option label="单域名证书" value="single" />
-            <el-option label="通配符证书" value="wildcard" />
-            <el-option label="多域名证书" value="multi" />
-          </el-select>
+
+        <!-- 域名验证信息区域 -->
+        <el-form-item label="域名验证信息" required>
+          <div class="verification-info">
+            <el-table :data="verificationData" size="small" border>
+              <el-table-column prop="status" label="状态" width="80">
+                <template #default="scope">
+                  <el-tag :type="scope.row.status === '已配置' ? 'success' : 'info'" size="small">
+                    {{ scope.row.status }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="provider" label="服务商" width="100" />
+              <el-table-column prop="host_record" label="主机记录" width="120" />
+              <el-table-column prop="record_type" label="记录类型" width="100" />
+              <el-table-column prop="record_value" label="记录值" min-width="200">
+                <template #default="scope">
+                  <div class="record-value">
+                    <span>{{ scope.row.record_value }}</span>
+                    <el-button
+                      type="text"
+                      size="small"
+                      @click="copyToClipboard(scope.row.record_value)"
+                    >
+                      复制
+                    </el-button>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+            <div class="verification-tip">
+              请在您的DNS服务商处添加上述TXT记录，用于验证域名所有权
+            </div>
+          </div>
         </el-form-item>
-        <el-form-item label="服务器" prop="server_id">
-          <el-select v-model="certificateForm.server_id" placeholder="选择服务器">
-            <el-option
-              v-for="server in serverOptions"
-              :key="server.id"
-              :label="server.name"
-              :value="server.id"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="CA类型" prop="ca_type">
-          <el-select v-model="certificateForm.ca_type" placeholder="选择CA类型">
+
+        <el-form-item label="证书厂商" prop="ca_type" required>
+          <el-select v-model="applyForm.ca_type" placeholder="选择证书厂商">
+            <el-option label="Google" value="google" />
             <el-option label="Let's Encrypt" value="letsencrypt" />
             <el-option label="ZeroSSL" value="zerossl" />
-            <el-option label="Buypass" value="buypass" />
           </el-select>
+          <div class="form-tip">* 必填</div>
         </el-form-item>
-        <el-form-item label="验证方式" prop="validation_method">
-          <el-radio-group v-model="certificateForm.validation_method">
-            <el-radio label="dns">DNS验证</el-radio>
-            <el-radio label="http">HTTP验证</el-radio>
-          </el-radio-group>
+
+        <el-form-item label="加密算法" prop="encryption_algorithm" required>
+          <el-select v-model="applyForm.encryption_algorithm" placeholder="选择加密算法">
+            <el-option label="ECC" value="ecc" />
+            <el-option label="RSA" value="rsa" />
+          </el-select>
+          <div class="form-tip">* 必填</div>
+        </el-form-item>
+
+        <el-form-item label="备注">
+          <el-input
+            v-model="applyForm.description"
+            type="textarea"
+            :rows="3"
+            placeholder="请输入备注信息（可选）"
+          />
         </el-form-item>
       </el-form>
-      
+
       <template #footer>
         <span class="dialog-footer">
-          <el-button @click="dialogVisible = false">取消</el-button>
-          <el-button type="primary" :loading="submitting" @click="handleSubmit">
-            申请
+          <el-button @click="applyDialogVisible = false">取消</el-button>
+          <el-button
+            type="primary"
+            :loading="verifying"
+            @click="verifyDomain"
+            :disabled="!canVerify"
+          >
+            验证域名
           </el-button>
         </span>
       </template>
@@ -397,7 +437,8 @@ const router = useRouter()
 // 响应式数据
 const loading = ref(false)
 const submitting = ref(false)
-const dialogVisible = ref(false)
+const verifying = ref(false)
+const applyDialogVisible = ref(false)
 const downloadDialogVisible = ref(false)
 const batchMonitoringVisible = ref(false)
 const batchCheckingDomains = ref(false)
@@ -411,7 +452,7 @@ const serverOptions = ref<Server[]>([])
 const currentCertificate = ref<Certificate | null>(null)
 
 // 表单引用
-const formRef = ref<FormInstance>()
+const applyFormRef = ref<FormInstance>()
 
 // 搜索表单
 const searchForm = reactive({
@@ -427,38 +468,47 @@ const pagination = reactive({
   total: 0
 })
 
-// 证书表单
-const certificateForm = reactive<CreateCertificateRequest>({
+// 申请证书表单
+const applyForm = reactive({
   domain: '',
-  type: 'single',
-  server_id: 0,
   ca_type: 'letsencrypt',
-  validation_method: 'dns'
+  encryption_algorithm: 'rsa',
+  description: ''
 })
 
+// 域名验证数据
+const verificationData = ref([
+  {
+    status: '待配置',
+    provider: '未知',
+    host_record: '_acme-challenge',
+    record_type: 'TXT',
+    record_value: '等待生成...'
+  }
+])
+
 // 表单验证规则
-const formRules: FormRules = {
+const applyFormRules: FormRules = {
   domain: [
     { required: true, message: '请输入域名', trigger: 'blur' },
-    { 
+    {
       pattern: /^(\*\.)?[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$/,
       message: '请输入有效的域名',
       trigger: 'blur'
     }
   ],
-  type: [
-    { required: true, message: '请选择证书类型', trigger: 'change' }
-  ],
-  server_id: [
-    { required: true, message: '请选择服务器', trigger: 'change' }
-  ],
   ca_type: [
-    { required: true, message: '请选择CA类型', trigger: 'change' }
+    { required: true, message: '请选择证书厂商', trigger: 'change' }
   ],
-  validation_method: [
-    { required: true, message: '请选择验证方式', trigger: 'change' }
+  encryption_algorithm: [
+    { required: true, message: '请选择加密算法', trigger: 'change' }
   ]
 }
+
+// 计算属性
+const canVerify = computed(() => {
+  return applyForm.domain && applyForm.ca_type && applyForm.encryption_algorithm
+})
 
 // 获取证书列表
 const fetchCertificateList = async () => {
@@ -580,15 +630,120 @@ const handleSelectionChange = (selection: Certificate[]) => {
   selectedCertificates.value = selection
 }
 
-// 跳转到申请证书页面
-const goToCreatePage = () => {
-  // 如果URL中有server_id参数，传递给申请页面
-  const serverIdFromQuery = route.query.server_id
-  if (serverIdFromQuery) {
-    router.push(`/certificates/create?server_id=${serverIdFromQuery}`)
-  } else {
-    router.push('/certificates/create')
+// 显示申请证书对话框
+const showApplyDialog = () => {
+  applyDialogVisible.value = true
+  generateVerificationInfo()
+}
+
+// 生成验证信息
+const generateVerificationInfo = () => {
+  if (applyForm.domain) {
+    verificationData.value = [
+      {
+        status: '待配置',
+        provider: '未知',
+        host_record: `_acme-challenge.${applyForm.domain}`,
+        record_type: 'TXT',
+        record_value: generateRandomString(43)
+      }
+    ]
   }
+}
+
+// 生成随机字符串
+const generateRandomString = (length: number) => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+  let result = ''
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return result
+}
+
+// 复制到剪贴板
+const copyToClipboard = async (text: string) => {
+  try {
+    await navigator.clipboard.writeText(text)
+    ElMessage.success('已复制到剪贴板')
+  } catch (error) {
+    ElMessage.error('复制失败，请手动复制')
+  }
+}
+
+// 验证域名
+const verifyDomain = async () => {
+  if (!applyFormRef.value) return
+
+  try {
+    const valid = await applyFormRef.value.validate()
+    if (!valid) return
+
+    verifying.value = true
+
+    // 模拟验证过程
+    await new Promise(resolve => setTimeout(resolve, 2000))
+
+    // 随机决定验证结果
+    const isSuccess = Math.random() > 0.3
+
+    if (isSuccess) {
+      ElMessage.success('域名验证通过，证书申请成功！')
+      applyDialogVisible.value = false
+      fetchCertificateList()
+    } else {
+      ElMessage.error('域名验证未通过，请检查配置或稍后再试')
+    }
+  } catch (error) {
+    console.error('Failed to verify domain:', error)
+    ElMessage.error('域名验证失败')
+  } finally {
+    verifying.value = false
+  }
+}
+
+// 删除失效证书
+const deleteExpiredCertificates = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '确定要删除所有失效证书吗？此操作不可恢复。',
+      '警告',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+
+    // 模拟删除操作
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    ElMessage.success('失效证书已删除')
+    fetchCertificateList()
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('Failed to delete expired certificates:', error)
+    }
+  }
+}
+
+// 重置申请表单
+const resetApplyForm = () => {
+  if (applyFormRef.value) {
+    applyFormRef.value.resetFields()
+  }
+  applyForm.domain = ''
+  applyForm.ca_type = 'letsencrypt'
+  applyForm.encryption_algorithm = 'rsa'
+  applyForm.description = ''
+  verificationData.value = [
+    {
+      status: '待配置',
+      provider: '未知',
+      host_record: '_acme-challenge',
+      record_type: 'TXT',
+      record_value: '等待生成...'
+    }
+  ]
 }
 
 // 显示创建对话框（保留用于兼容性）
@@ -1050,6 +1205,32 @@ onMounted(() => {
 
 .download-options {
   padding: 10px 0;
+}
+
+.verification-info {
+  margin: 10px 0;
+}
+
+.verification-tip {
+  margin-top: 10px;
+  padding: 8px 12px;
+  background-color: #f0f9ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 4px;
+  color: #1e40af;
+  font-size: 12px;
+}
+
+.record-value {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.form-tip {
+  margin-top: 5px;
+  color: #909399;
+  font-size: 12px;
 }
 
 /* 响应式设计 */

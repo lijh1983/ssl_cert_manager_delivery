@@ -16,6 +16,12 @@
       </div>
       
       <div class="header-right">
+        <!-- 消息通知 -->
+        <el-badge :value="unreadCount" :hidden="unreadCount === 0" class="notification-badge">
+          <el-button :icon="Bell" circle @click="showNotifications" />
+        </el-badge>
+
+        <!-- 用户下拉菜单 -->
         <el-dropdown @command="handleUserCommand">
           <span class="user-dropdown">
             <el-avatar :size="32" :src="userAvatar">
@@ -28,7 +34,11 @@
             <el-dropdown-menu>
               <el-dropdown-item command="profile">
                 <el-icon><User /></el-icon>
-                个人信息
+                个人中心
+              </el-dropdown-item>
+              <el-dropdown-item command="settings">
+                <el-icon><Setting /></el-icon>
+                设置
               </el-dropdown-item>
               <el-dropdown-item command="logout" divided>
                 <el-icon><SwitchButton /></el-icon>
@@ -54,52 +64,33 @@
           router
           class="sidebar-menu"
         >
-          <el-menu-item index="/dashboard">
-            <el-icon><Odometer /></el-icon>
-            <template #title>仪表盘</template>
-          </el-menu-item>
-          
-          <el-menu-item index="/servers">
-            <el-icon><Monitor /></el-icon>
-            <template #title>服务器管理</template>
-          </el-menu-item>
-          
           <el-menu-item index="/certificates">
             <el-icon><Document /></el-icon>
             <template #title>证书管理</template>
           </el-menu-item>
-          
-          <el-sub-menu index="/alerts">
-            <template #title>
-              <el-icon><Bell /></el-icon>
-              <span>告警管理</span>
-            </template>
-            <el-menu-item index="/alerts">
-              <template #title>活跃告警</template>
-            </el-menu-item>
-            <el-menu-item
-              v-if="authStore.isAdmin"
-              index="/alerts/rules"
-            >
-              <template #title>告警规则</template>
-            </el-menu-item>
-          </el-sub-menu>
-          
-          <el-menu-item index="/logs">
-            <el-icon><Tickets /></el-icon>
-            <template #title>操作日志</template>
+
+          <el-menu-item index="/deployment">
+            <el-icon><Monitor /></el-icon>
+            <template #title>自动部署</template>
           </el-menu-item>
-          
-          <el-menu-item 
-            v-if="authStore.isAdmin" 
+
+          <el-menu-item index="/monitoring">
+            <el-icon><Bell /></el-icon>
+            <template #title>证书监控</template>
+          </el-menu-item>
+
+          <!-- 管理员功能 -->
+          <el-divider v-if="authStore.isAdmin" />
+          <el-menu-item
+            v-if="authStore.isAdmin"
             index="/users"
           >
             <el-icon><UserFilled /></el-icon>
             <template #title>用户管理</template>
           </el-menu-item>
-          
-          <el-menu-item 
-            v-if="authStore.isAdmin" 
+
+          <el-menu-item
+            v-if="authStore.isAdmin"
             index="/settings"
           >
             <el-icon><Setting /></el-icon>
@@ -114,6 +105,15 @@
       </el-main>
     </el-container>
 
+    <!-- 页脚 -->
+    <el-footer class="footer">
+      <div class="footer-content">
+        <span>© 2025 SSL证书自动化管理系统</span>
+        <span>版本 1.0.0</span>
+        <el-link href="#" type="primary">帮助文档</el-link>
+      </div>
+    </el-footer>
+
     <!-- 移动端遮罩层 -->
     <div 
       v-if="isMobile && !isCollapse" 
@@ -127,10 +127,9 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { 
+import {
   Lock, Fold, ArrowDown, User, SwitchButton,
-  Odometer, Monitor, Document, Bell, Tickets, 
-  UserFilled, Setting 
+  Monitor, Document, Bell, UserFilled, Setting
 } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 
@@ -141,13 +140,13 @@ const authStore = useAuthStore()
 const isCollapse = ref(false)
 const isMobile = ref(false)
 const userAvatar = ref('')
+const unreadCount = ref(0)
 
 const activeMenu = computed(() => {
   const path = route.path
-  if (path.startsWith('/servers')) return '/servers'
   if (path.startsWith('/certificates')) return '/certificates'
-  if (path.startsWith('/alerts')) return '/alerts'
-  if (path.startsWith('/logs')) return '/logs'
+  if (path.startsWith('/deployment') || path.startsWith('/servers')) return '/deployment'
+  if (path.startsWith('/monitoring')) return '/monitoring'
   if (path.startsWith('/users')) return '/users'
   if (path.startsWith('/settings')) return '/settings'
   return path
@@ -180,11 +179,20 @@ const closeSidebar = () => {
   }
 }
 
+// 显示通知
+const showNotifications = () => {
+  // TODO: 实现通知功能
+  console.log('显示通知')
+}
+
 // 处理用户下拉菜单命令
 const handleUserCommand = async (command: string) => {
   switch (command) {
     case 'profile':
       router.push('/profile')
+      break
+    case 'settings':
+      router.push('/settings')
       break
     case 'logout':
       try {
@@ -265,6 +273,11 @@ onUnmounted(() => {
 .header-right {
   display: flex;
   align-items: center;
+  gap: 15px;
+}
+
+.notification-badge {
+  margin-right: 10px;
 }
 
 .user-dropdown {
@@ -315,6 +328,23 @@ onUnmounted(() => {
   background-color: #f5f7fa;
   overflow-y: auto;
   padding: 20px;
+}
+
+.footer {
+  background-color: #fff;
+  border-top: 1px solid #e6e6e6;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.footer-content {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  color: #606266;
+  font-size: 14px;
 }
 
 .mobile-overlay {

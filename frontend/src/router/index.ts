@@ -13,41 +13,28 @@ const router = createRouter({
     },
     {
       path: '/',
-      redirect: '/dashboard'
+      redirect: '/certificates'
     },
     {
-      path: '/dashboard',
-      name: 'Dashboard',
-      component: createRouteComponent(() => import('@/layouts/MainLayout.vue')),
-      meta: { requiresAuth: true },
-      children: [
-        {
-          path: '',
-          name: 'DashboardHome',
-          component: createRouteComponent(() => import('@/views/Dashboard.vue'))
-        }
-      ]
-    },
-    {
-      path: '/servers',
-      name: 'Servers',
+      path: '/deployment',
+      name: 'Deployment',
       component: () => import('@/layouts/MainLayout.vue'),
       meta: { requiresAuth: true },
       children: [
         {
           path: '',
-          name: 'ServerList',
-          component: createRouteComponent(() => import('@/views/servers/ServerList.vue'))
+          name: 'DeploymentList',
+          component: createRouteComponent(() => import('@/views/deployment/DeploymentList.vue'))
         },
         {
           path: 'create',
-          name: 'ServerCreate',
-          component: createRouteComponent(() => import('@/views/servers/ServerCreate.vue'))
+          name: 'DeploymentCreate',
+          component: createRouteComponent(() => import('@/views/deployment/DeploymentCreate.vue'))
         },
         {
           path: ':id',
-          name: 'ServerDetail',
-          component: createRouteComponent(() => import('@/views/servers/ServerDetail.vue'))
+          name: 'DeploymentDetail',
+          component: createRouteComponent(() => import('@/views/deployment/DeploymentDetail.vue'))
         }
       ]
     },
@@ -75,35 +62,25 @@ const router = createRouter({
       ]
     },
     {
-      path: '/alerts',
-      name: 'Alerts',
+      path: '/monitoring',
+      name: 'Monitoring',
       component: () => import('@/layouts/MainLayout.vue'),
       meta: { requiresAuth: true },
       children: [
         {
           path: '',
-          name: 'ActiveAlerts',
-          component: createRouteComponent(() => import('@/views/alerts/ActiveAlerts.vue')),
-          meta: { title: '活跃告警' }
+          name: 'MonitoringList',
+          component: createRouteComponent(() => import('@/views/monitoring/MonitoringList.vue'))
         },
         {
-          path: 'rules',
-          name: 'AlertRules',
-          component: createRouteComponent(() => import('@/views/alerts/AlertRules.vue')),
-          meta: { title: '告警规则', requiresAdmin: true }
-        }
-      ]
-    },
-    {
-      path: '/logs',
-      name: 'Logs',
-      component: () => import('@/layouts/MainLayout.vue'),
-      meta: { requiresAuth: true },
-      children: [
+          path: 'create',
+          name: 'MonitoringCreate',
+          component: createRouteComponent(() => import('@/views/monitoring/MonitoringCreate.vue'))
+        },
         {
-          path: '',
-          name: 'LogList',
-          component: createRouteComponent(() => import('@/views/logs/LogList.vue'))
+          path: ':id',
+          name: 'MonitoringDetail',
+          component: createRouteComponent(() => import('@/views/monitoring/MonitoringDetail.vue'))
         }
       ]
     },
@@ -175,12 +152,12 @@ router.beforeEach((to, from, next) => {
   if (to.path.startsWith('/certificates')) {
     componentPreloader.add('CertificateList', () => import('@/views/certificates/CertificateList.vue'))
     componentPreloader.add('CertificateDetail', () => import('@/views/certificates/CertificateDetail.vue'))
-  } else if (to.path.startsWith('/servers')) {
-    componentPreloader.add('ServerList', () => import('@/views/servers/ServerList.vue'))
-    componentPreloader.add('ServerDetail', () => import('@/views/servers/ServerDetail.vue'))
-  } else if (to.path.startsWith('/alerts')) {
-    componentPreloader.add('ActiveAlerts', () => import('@/views/alerts/ActiveAlerts.vue'))
-    componentPreloader.add('AlertRules', () => import('@/views/alerts/AlertRules.vue'))
+  } else if (to.path.startsWith('/deployment')) {
+    componentPreloader.add('DeploymentList', () => import('@/views/deployment/DeploymentList.vue'))
+    componentPreloader.add('DeploymentDetail', () => import('@/views/deployment/DeploymentDetail.vue'))
+  } else if (to.path.startsWith('/monitoring')) {
+    componentPreloader.add('MonitoringList', () => import('@/views/monitoring/MonitoringList.vue'))
+    componentPreloader.add('MonitoringDetail', () => import('@/views/monitoring/MonitoringDetail.vue'))
   }
 
   next()
