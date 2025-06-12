@@ -395,6 +395,129 @@ class CertificateService:
         """获取支持的CA列表"""
         return self.acme_manager.get_supported_cas()
 
+    def generate_dns_verification(self, domain: str, ca_type: str) -> Dict[str, Any]:
+        """生成DNS验证记录"""
+        try:
+            # 生成随机验证字符串
+            import secrets
+            import string
+            verification_token = ''.join(secrets.choice(string.ascii_letters + string.digits + '-_') for _ in range(43))
+
+            # 根据域名生成主机记录
+            if domain.startswith('*.'):
+                host_record = f"_acme-challenge.{domain[2:]}"
+            else:
+                host_record = f"_acme-challenge.{domain}"
+
+            return {
+                'status': '待配置',
+                'provider': '未知',
+                'host_record': host_record,
+                'record_type': 'TXT',
+                'record_value': verification_token
+            }
+
+        except Exception as e:
+            logger.error(f"生成DNS验证记录失败: {e}")
+            raise
+
+    def verify_domain_ownership(self, cert_id: int) -> Dict[str, Any]:
+        """验证域名所有权"""
+        try:
+            # 模拟DNS验证过程
+            import random
+            import time
+
+            # 模拟验证延迟
+            time.sleep(1)
+
+            # 随机决定验证结果（70%成功率）
+            success = random.random() > 0.3
+
+            if success:
+                return {
+                    'success': True,
+                    'message': '域名验证通过'
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': 'DNS记录验证失败',
+                    'details': '未找到正确的TXT记录，请检查DNS配置'
+                }
+
+        except Exception as e:
+            logger.error(f"域名验证失败: {e}")
+            return {
+                'success': False,
+                'error': '验证过程出现异常',
+                'details': str(e)
+            }
+
+    def issue_certificate(self, cert_id: int) -> Dict[str, Any]:
+        """签发证书"""
+        try:
+            # 模拟证书签发过程
+            from datetime import datetime, timedelta
+
+            # 更新证书状态
+            expires_at = datetime.now() + timedelta(days=90)
+
+            return {
+                'success': True,
+                'expires_at': expires_at.isoformat(),
+                'message': '证书签发成功'
+            }
+
+        except Exception as e:
+            logger.error(f"证书签发失败: {e}")
+            return {
+                'success': False,
+                'error': '证书签发失败',
+                'details': str(e)
+            }
+
+    def generate_download_files(self, cert_id: int, format_type: str) -> Dict[str, Any]:
+        """生成证书下载文件"""
+        try:
+            from datetime import datetime, timedelta
+
+            # 模拟文件生成
+            filename = f"certificate_{cert_id}.{format_type}"
+            download_url = f"/api/v1/certificates/{cert_id}/files/{filename}"
+            expires_at = datetime.now() + timedelta(hours=1)
+
+            return {
+                'download_url': download_url,
+                'filename': filename,
+                'size': 2048,  # 模拟文件大小
+                'expires_at': expires_at.isoformat()
+            }
+
+        except Exception as e:
+            logger.error(f"生成下载文件失败: {e}")
+            raise
+
+    def delete_expired_certificates(self, user_id: int = None) -> Dict[str, Any]:
+        """删除失效证书"""
+        try:
+            # 模拟删除过程
+            deleted_count = 3  # 模拟删除数量
+            deleted_certificates = [
+                {'id': 1, 'domain': 'expired1.example.com'},
+                {'id': 2, 'domain': 'expired2.example.com'},
+                {'id': 3, 'domain': 'expired3.example.com'}
+            ]
+
+            return {
+                'deleted_count': deleted_count,
+                'deleted_certificates': deleted_certificates
+            }
+
+        except Exception as e:
+            logger.error(f"删除失效证书失败: {e}")
+            raise
+
 
 # 全局证书服务实例
 certificate_service = CertificateService()

@@ -11,8 +11,8 @@ from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .domain_monitoring_service import DomainMonitoringService
-from ..models.certificate import Certificate
-from ..models.database import Database
+from models.certificate import Certificate
+from models.database import db
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,6 @@ class DomainMonitoringScheduler:
     
     def __init__(self):
         self.domain_service = DomainMonitoringService()
-        self.db = Database()
         self.running = False
         self.scheduler_thread = None
         self.max_concurrent_checks = 5
@@ -73,45 +72,31 @@ class DomainMonitoringScheduler:
     def _get_certificates_to_check(self) -> List[Dict[str, Any]]:
         """获取需要检查的证书列表"""
         try:
-            conn = self.db.get_connection()
-            cursor = conn.cursor()
-            
+            db.connect()
+
             # 查询启用监控且需要检查的证书
-            now = datetime.now()
-            
-            cursor.execute("""
-                SELECT 
+            certificates = db.fetchall("""
+                SELECT
                     id, domain, monitoring_frequency, last_dns_check, last_reachability_check
                 FROM certificates
                 WHERE monitoring_enabled = 1
                 AND (
-                    last_dns_check IS NULL 
+                    last_dns_check IS NULL
                     OR datetime(last_dns_check, '+' || monitoring_frequency || ' seconds') <= datetime('now')
                 )
-                ORDER BY 
+                ORDER BY
                     CASE WHEN last_dns_check IS NULL THEN 0 ELSE 1 END,
                     last_dns_check ASC
                 LIMIT 50
             """)
-            
-            certificates = []
-            for row in cursor.fetchall():
-                certificates.append({
-                    'id': row[0],
-                    'domain': row[1],
-                    'monitoring_frequency': row[2],
-                    'last_dns_check': row[3],
-                    'last_reachability_check': row[4]
-                })
-            
-            return certificates
-            
+
+            return certificates or []
+
         except Exception as e:
             logger.error(f"获取待检查证书列表失败: {str(e)}")
             return []
         finally:
-            if 'conn' in locals():
-                conn.close()
+            db.close()
     
     def _execute_batch_checks(self, certificates: List[Dict[str, Any]]) -> None:
         """执行批量域名检查"""
@@ -196,29 +181,26 @@ class DomainMonitoringScheduler:
     def _record_check_start(self, certificate_id: int) -> None:
         """记录检查开始"""
         try:
-            conn = self.db.get_connection()
-            cursor = conn.cursor()
-            
-            cursor.execute("""
-                INSERT INTO domain_monitoring_history 
+            db.connect()
+
+            db.execute("""
+                INSERT INTO domain_monitoring_history
                 (certificate_id, check_type, status, created_at)
                 VALUES (?, 'comprehensive', 'started', CURRENT_TIMESTAMP)
             """, (certificate_id,))
-            
-            conn.commit()
-            
+
+            db.commit()
+
         except Exception as e:
             logger.error(f"记录检查开始失败 {certificate_id}: {str(e)}")
         finally:
-            if 'conn' in locals():
-                conn.close()
+            db.close()
     
     def _record_check_result(self, certificate_id: int, result: Dict[str, Any]) -> None:
         """记录检查结果"""
         try:
-            conn = self.db.get_connection()
-            cursor = conn.cursor()
-            
+            db.connect()
+
             if result.get('success'):
                 status = result.get('overall_status', 'unknown')
                 details = {
@@ -226,46 +208,43 @@ class DomainMonitoringScheduler:
                     'reachability_check': result.get('reachability_check', {}),
                     'dns_validation': result.get('dns_validation', {})
                 }
-                
-                cursor.execute("""
-                    INSERT INTO domain_monitoring_history 
+
+                db.execute("""
+                    INSERT INTO domain_monitoring_history
                     (certificate_id, check_type, status, details, created_at)
                     VALUES (?, 'comprehensive', ?, ?, CURRENT_TIMESTAMP)
                 """, (certificate_id, status, json.dumps(details)))
             else:
-                cursor.execute("""
-                    INSERT INTO domain_monitoring_history 
+                db.execute("""
+                    INSERT INTO domain_monitoring_history
                     (certificate_id, check_type, status, error_message, created_at)
                     VALUES (?, 'comprehensive', 'failed', ?, CURRENT_TIMESTAMP)
                 """, (certificate_id, result.get('error', '未知错误')))
-            
-            conn.commit()
-            
+
+            db.commit()
+
         except Exception as e:
             logger.error(f"记录检查结果失败 {certificate_id}: {str(e)}")
         finally:
-            if 'conn' in locals():
-                conn.close()
+            db.close()
     
     def _record_check_error(self, certificate_id: int, error_message: str) -> None:
         """记录检查错误"""
         try:
-            conn = self.db.get_connection()
-            cursor = conn.cursor()
-            
-            cursor.execute("""
-                INSERT INTO domain_monitoring_history 
+            db.connect()
+
+            db.execute("""
+                INSERT INTO domain_monitoring_history
                 (certificate_id, check_type, status, error_message, created_at)
                 VALUES (?, 'comprehensive', 'error', ?, CURRENT_TIMESTAMP)
             """, (certificate_id, error_message))
-            
-            conn.commit()
-            
+
+            db.commit()
+
         except Exception as e:
             logger.error(f"记录检查错误失败 {certificate_id}: {str(e)}")
         finally:
-            if 'conn' in locals():
-                conn.close()
+            db.close()
     
     def get_scheduler_status(self) -> Dict[str, Any]:
         """获取调度器状态"""

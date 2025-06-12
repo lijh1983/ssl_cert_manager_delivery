@@ -10,9 +10,11 @@ from .database import db
 class Server:
     """服务器模型类"""
     
-    def __init__(self, id: int = None, name: str = None, ip: str = None, 
+    def __init__(self, id: int = None, name: str = None, ip: str = None,
                  os_type: str = None, version: str = None, token: str = None,
                  auto_renew: bool = True, user_id: int = None,
+                 server_type: str = None, description: str = None,
+                 status: str = None, last_seen: str = None,
                  created_at: str = None, updated_at: str = None):
         """初始化服务器对象"""
         self.id = id
@@ -23,6 +25,10 @@ class Server:
         self.token = token
         self.auto_renew = auto_renew
         self.user_id = user_id
+        self.server_type = server_type or 'nginx'
+        self.description = description or ''
+        self.status = status or 'unknown'
+        self.last_seen = last_seen
         self.created_at = created_at
         self.updated_at = updated_at
     
@@ -105,16 +111,20 @@ class Server:
                 'os_type': self.os_type if self.os_type else '',
                 'version': self.version if self.version else '',
                 'auto_renew': self.auto_renew,
+                'server_type': self.server_type,
+                'description': self.description,
+                'status': self.status,
+                'last_seen': self.last_seen or now,
                 'updated_at': now
             }
-            
+
             db.update('servers', data, 'id = ?', (self.id,))
             server_id = self.id
         else:
             # 创建新服务器
             if not self.token:
                 self.token = self.generate_token()
-                
+
             data = {
                 'name': self.name,
                 'ip': self.ip if self.ip else '',
@@ -123,6 +133,10 @@ class Server:
                 'token': self.token,
                 'auto_renew': self.auto_renew,
                 'user_id': self.user_id,
+                'server_type': self.server_type,
+                'description': self.description,
+                'status': self.status,
+                'last_seen': now,
                 'created_at': now,
                 'updated_at': now
             }
@@ -156,6 +170,10 @@ class Server:
             'token': self.token,
             'auto_renew': self.auto_renew,
             'user_id': self.user_id,
+            'server_type': self.server_type,
+            'description': self.description,
+            'status': self.status,
+            'last_seen': self.last_seen,
             'created_at': self.created_at,
             'updated_at': self.updated_at
         }
@@ -213,17 +231,25 @@ class Server:
         return (now - last_update).total_seconds() < 300
     
     @classmethod
-    def create(cls, name: str, user_id: int, auto_renew: bool = True) -> 'Server':
+    def create(cls, name: str, user_id: int, auto_renew: bool = True,
+               server_type: str = 'nginx', os_type: str = '', ip: str = '',
+               version: str = '', description: str = '') -> 'Server':
         """创建新服务器"""
         token = cls.generate_token()
         server = cls(
             name=name,
             token=token,
             auto_renew=auto_renew,
-            user_id=user_id
+            user_id=user_id,
+            server_type=server_type,
+            os_type=os_type,
+            ip=ip,
+            version=version,
+            description=description,
+            status='offline'
         )
         server.save()
-        
+
         return server
     
     def register(self, ip: str, os_type: str, version: str, hostname: str = None) -> None:

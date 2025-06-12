@@ -1,0 +1,95 @@
+# SSL证书管理系统 MySQL 8.0.41 配置文件
+# 优化配置用于SSL证书管理系统
+
+[mysqld]
+# 基本设置
+server-id = 1
+port = 3306
+bind-address = 0.0.0.0
+
+# 字符集设置
+character-set-server = utf8mb4
+collation-server = utf8mb4_unicode_ci
+init-connect = 'SET NAMES utf8mb4'
+
+# 默认认证插件
+default-authentication-plugin = mysql_native_password
+
+# 连接设置
+max-connections = 200
+max-connect-errors = 1000
+connect-timeout = 10
+wait-timeout = 28800
+interactive-timeout = 28800
+
+# 缓冲区设置
+innodb-buffer-pool-size = 256M
+innodb-buffer-pool-instances = 1
+innodb-log-buffer-size = 16M
+key-buffer-size = 32M
+read-buffer-size = 2M
+read-rnd-buffer-size = 8M
+sort-buffer-size = 8M
+join-buffer-size = 8M
+
+# InnoDB设置
+innodb-file-per-table = 1
+innodb-flush-log-at-trx-commit = 2
+innodb-flush-method = O_DIRECT
+innodb-log-file-size = 64M
+innodb-log-files-in-group = 2
+innodb-open-files = 400
+innodb-io-capacity = 400
+innodb-read-io-threads = 4
+innodb-write-io-threads = 4
+
+# 查询缓存设置
+query-cache-type = 1
+query-cache-size = 32M
+query-cache-limit = 2M
+
+# 临时表设置
+tmp-table-size = 64M
+max-heap-table-size = 64M
+
+# 日志设置
+log-error = /var/log/mysql/error.log
+slow-query-log = 1
+slow-query-log-file = /var/log/mysql/slow.log
+long-query-time = 2
+log-queries-not-using-indexes = 0
+
+# 二进制日志设置（用于备份和复制）
+log-bin = mysql-bin
+binlog-format = ROW
+expire-logs-days = 7
+max-binlog-size = 100M
+
+# 安全设置
+local-infile = 0
+skip-show-database
+
+# 性能优化
+table-open-cache = 400
+table-definition-cache = 400
+thread-cache-size = 50
+thread-stack = 256K
+
+# SSL设置（如果需要）
+# ssl-ca = /etc/mysql/ssl/ca.pem
+# ssl-cert = /etc/mysql/ssl/server-cert.pem
+# ssl-key = /etc/mysql/ssl/server-key.pem
+
+# 时区设置
+default-time-zone = '+08:00'
+
+# SQL模式设置
+sql-mode = STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION
+
+[mysql]
+default-character-set = utf8mb4
+
+[client]
+default-character-set = utf8mb4
+port = 3306
+socket = /var/run/mysqld/mysqld.sock

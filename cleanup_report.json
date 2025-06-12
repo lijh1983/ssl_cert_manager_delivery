@@ -1,0 +1,157 @@
+{
+  "timestamp": "2025-06-12T07:23:03.340738",
+  "deleted_files": [
+    {
+      "path": "docker-compose.aliyun.yml",
+      "reason": "Redundant Docker configuration"
+    },
+    {
+      "path": "docker-compose.dev.yml",
+      "reason": "Redundant Docker configuration"
+    },
+    {
+      "path": "docker-compose.local.yml",
+      "reason": "Redundant Docker configuration"
+    },
+    {
+      "path": "docker-compose.nginx-dev.yml",
+      "reason": "Redundant Docker configuration"
+    },
+    {
+      "path": "docker-compose.prod.yml",
+      "reason": "Redundant Docker configuration"
+    },
+    {
+      "path": "backend/Dockerfile.base",
+      "reason": "Redundant Docker configuration"
+    },
+    {
+      "path": "backend/Dockerfile.base.china",
+      "reason": "Redundant Docker configuration"
+    },
+    {
+      "path": "frontend/Dockerfile.base",
+      "reason": "Redundant Docker configuration"
+    },
+    {
+      "path": "nginx/Dockerfile.proxy.alpine",
+      "reason": "Redundant Docker configuration"
+    },
+    {
+      "path": "nginx/Dockerfile.standalone",
+      "reason": "Redundant Docker configuration"
+    },
+    {
+      "path": "frontend/nginx-default.conf",
+      "reason": "Redundant configuration"
+    },
+    {
+      "path": "nginx/conf.d/ssl-manager-dev.conf",
+      "reason": "Redundant configuration"
+    },
+    {
+      "path": "nginx/conf.d/ssl-manager-prod.conf",
+      "reason": "Redundant configuration"
+    },
+    {
+      "path": "nginx/conf.d/ssl-manager-simple.conf",
+      "reason": "Redundant configuration"
+    },
+    {
+      "path": "nginx/conf.d/ssl-manager-standalone.conf",
+      "reason": "Redundant configuration"
+    }
+  ],
+  "kept_files": [],
+  "analysis": {
+    "total_files": 203,
+    "file_types": {
+      ".md": 18,
+      ".sh": 9,
+      ".yml": 12,
+      ".log": 2,
+      ".json": 4,
+      "": 4,
+      ".base": 2,
+      ".china": 1,
+      ".py": 56,
+      ".txt": 2,
+      ".db": 3,
+      ".production": 1,
+      ".sql": 10,
+      ".pem": 3,
+      ".html": 2,
+      ".conf": 8,
+      ".ts": 26,
+      ".vue": 34,
+      ".alpine": 1,
+      ".standalone": 1,
+      ".template": 1,
+      ".service": 2,
+      ".cnf": 1
+    },
+    "directories": [
+      ".",
+      "backend",
+      "backend/database",
+      "backend/migrations",
+      "backend/src",
+      "backend/src/models",
+      "backend/src/services",
+      "backend/src/utils",
+      "backend/tests",
+      "backend/certs",
+      "backend/docker",
+      "backend/config",
+      "backend/scripts",
+      "backup",
+      "backup/monitoring-removed-20250610_072107",
+      "backup/monitoring-removed-20250610_072107/grafana",
+      "backup/monitoring-removed-20250610_072107/grafana/datasources",
+      "client",
+      "database",
+      "database/init",
+      "docs",
+      "examples",
+      "frontend",
+      "frontend/src",
+      "frontend/src/api",
+      "frontend/src/components",
+      "frontend/src/layouts",
+      "frontend/src/router",
+      "frontend/src/stores",
+      "frontend/src/types",
+      "frontend/src/utils",
+      "frontend/src/views",
+      "frontend/src/views/alerts",
+      "frontend/src/views/certificates",
+      "frontend/src/views/logs",
+      "frontend/src/views/profile",
+      "frontend/src/views/servers",
+      "frontend/src/views/settings",
+      "frontend/src/views/users",
+      "frontend/src/views/deployment",
+      "frontend/src/views/monitoring",
+      "nginx",
+      "nginx/conf.d",
+      "scripts",
+      "scripts/systemd",
+      "test",
+      "test/backend-mock",
+      "test/frontend-mock",
+      "tests",
+      "tests/backend",
+      "tests/e2e",
+      "tests/frontend",
+      "tests/integration",
+      "mysql",
+      "mysql/conf.d"
+    ],
+    "duplicates": [],
+    "empty_files": [],
+    "large_files": [],
+    "potential_redundant": []
+  },
+  "warnings": [],
+  "errors": []
+}

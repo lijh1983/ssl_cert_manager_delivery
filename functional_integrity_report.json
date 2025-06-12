@@ -1,0 +1,273 @@
+{
+  "timestamp": "/mnt/persist/workspace",
+  "core_modules": {
+    "authentication": {
+      "description": "用户认证和授权",
+      "files_checked": 2,
+      "files_missing": [],
+      "files_present": [
+        "backend/src/models/user.py",
+        "frontend/src/views/Login.vue"
+      ],
+      "status": "complete"
+    },
+    "certificate_management": {
+      "description": "证书管理核心功能",
+      "files_checked": 4,
+      "files_missing": [
+        "frontend/src/views/Certificates.vue"
+      ],
+      "files_present": [
+        "backend/src/models/certificate.py",
+        "backend/src/services/certificate_service.py",
+        "backend/src/services/certificate_operations_service.py"
+      ],
+      "status": "partial"
+    },
+    "acme_integration": {
+      "description": "ACME协议集成",
+      "files_checked": 2,
+      "files_missing": [],
+      "files_present": [
+        "backend/src/services/acme_client.py",
+        "backend/src/services/certificate_service.py"
+      ],
+      "status": "complete"
+    },
+    "monitoring": {
+      "description": "证书监控和告警",
+      "files_checked": 5,
+      "files_missing": [
+        "frontend/src/views/Monitoring.vue"
+      ],
+      "files_present": [
+        "backend/src/services/monitoring_service.py",
+        "backend/src/services/domain_monitoring_service.py",
+        "backend/src/services/port_monitoring_service.py",
+        "backend/src/models/alert.py"
+      ],
+      "status": "partial"
+    },
+    "server_management": {
+      "description": "服务器管理",
+      "files_checked": 3,
+      "files_missing": [
+        "frontend/src/views/Servers.vue"
+      ],
+      "files_present": [
+        "backend/src/models/server.py",
+        "backend/src/services/server_service.py"
+      ],
+      "status": "partial"
+    },
+    "database": {
+      "description": "数据库层",
+      "files_checked": 3,
+      "files_missing": [],
+      "files_present": [
+        "backend/src/models/database.py",
+        "backend/database/init_mysql.sql",
+        "backend/migrations/"
+      ],
+      "status": "complete"
+    },
+    "api_layer": {
+      "description": "API接口层",
+      "files_checked": 4,
+      "files_missing": [],
+      "files_present": [
+        "backend/src/app.py",
+        "backend/src/simple_app.py",
+        "backend/src/services/",
+        "backend/src/utils/"
+      ],
+      "status": "complete"
+    },
+    "frontend_core": {
+      "description": "前端核心",
+      "files_checked": 4,
+      "files_missing": [
+        "frontend/src/store/"
+      ],
+      "files_present": [
+        "frontend/src/main.ts",
+        "frontend/src/App.vue",
+        "frontend/src/router/"
+      ],
+      "status": "partial"
+    },
+    "deployment": {
+      "description": "部署配置",
+      "files_checked": 4,
+      "files_missing": [],
+      "files_present": [
+        "docker-compose.production.yml",
+        "docker-compose.mysql.yml",
+        "backend/Dockerfile.production",
+        "nginx/nginx.conf"
+      ],
+      "status": "complete"
+    }
+  },
+  "python_syntax": {
+    "valid": [
+      "backend/config.py",
+      "backend/test_modules.py",
+      "backend/src/app.py",
+      "backend/src/simple_app.py",
+      "backend/src/models/__init__.py",
+      "backend/src/models/alert.py",
+      "backend/src/models/certificate.py",
+      "backend/src/models/database.py",
+      "backend/src/models/server.py",
+      "backend/src/models/user.py",
+      "backend/src/services/acme_client.py",
+      "backend/src/services/alert_manager.py",
+      "backend/src/services/certificate_operations_service.py",
+      "backend/src/services/certificate_service.py",
+      "backend/src/services/dns_providers.py",
+      "backend/src/services/domain_monitoring_scheduler.py",
+      "backend/src/services/domain_monitoring_service.py",
+      "backend/src/services/monitoring_service.py",
+      "backend/src/services/notification.py",
+      "backend/src/services/port_monitoring_service.py",
+      "backend/src/services/server_service.py",
+      "backend/src/utils/__init__.py",
+      "backend/src/utils/config_manager.py",
+      "backend/src/utils/csrf.py",
+      "backend/src/utils/error_handler.py",
+      "backend/src/utils/exceptions.py",
+      "backend/src/utils/logging_config.py",
+      "backend/src/utils/rate_limiter.py",
+      "backend/src/utils/validators.py",
+      "backend/src/utils/input_validator.py",
+      "backend/tests/test_basic_functionality.py",
+      "backend/tests/test_core_functionality.py",
+      "backend/config/gunicorn.conf.py",
+      "backend/scripts/migrate_sqlite_to_mysql.py",
+      "backend/scripts/test_mysql_connection.py",
+      "examples/error_handling_demo.py",
+      "scripts/validate_config.py",
+      "scripts/deployment_check.py",
+      "scripts/code_cleanup.py",
+      "scripts/functional_integrity_check.py",
+      "scripts/targeted_cleanup.py",
+      "tests/conftest.py",
+      "tests/test_error_handling.py",
+      "tests/backend/test_acme_client.py",
+      "tests/backend/test_acme_manager.py",
+      "tests/backend/test_alert_manager.py",
+      "tests/backend/test_api_auth.py",
+      "tests/backend/test_api_servers.py",
+      "tests/backend/test_certificate_service_comprehensive.py",
+      "tests/backend/test_notification.py",
+      "tests/backend/test_server_service.py",
+      "tests/backend/test_utils_modules.py",
+      "tests/e2e/test_user_journey.py",
+      "tests/integration/test_certificate_deployment.py",
+      "tests/integration/test_certificate_lifecycle.py",
+      "tests/integration/test_certificate_lifecycle_automation.py",
+      "tests/integration/test_concurrent_load.py"
+    ],
+    "invalid": [],
+    "errors": []
+  },
+  "import_dependencies": {
+    "resolved": [
+      "backend/src/app.py: 32 imports found",
+      "backend/src/models/database.py: 7 imports found",
+      "backend/src/models/certificate.py: 4 imports found"
+    ],
+    "unresolved": [
+      "backend/src/utils/acme_client.py: File not found"
+    ],
+    "errors": []
+  },
+  "docker_configurations": {
+    "docker-compose.yml": {
+      "description": "开发环境编排",
+      "exists": true,
+      "syntax_valid": false,
+      "errors": [
+        "docker-compose command not found"
+      ]
+    },
+    "docker-compose.production.yml": {
+      "description": "生产环境编排",
+      "exists": true,
+      "syntax_valid": false,
+      "errors": [
+        "docker-compose command not found"
+      ]
+    },
+    "docker-compose.mysql.yml": {
+      "description": "MySQL数据库编排",
+      "exists": true,
+      "syntax_valid": false,
+      "errors": [
+        "docker-compose command not found"
+      ]
+    },
+    "backend/Dockerfile": {
+      "description": "后端开发镜像",
+      "exists": true,
+      "syntax_valid": true,
+      "errors": []
+    },
+    "backend/Dockerfile.production": {
+      "description": "后端生产镜像",
+      "exists": true,
+      "syntax_valid": true,
+      "errors": []
+    },
+    "frontend/Dockerfile": {
+      "description": "前端镜像",
+      "exists": true,
+      "syntax_valid": true,
+      "errors": []
+    }
+  },
+  "configuration_files": {
+    "backend/requirements.txt": {
+      "description": "Python依赖",
+      "exists": true,
+      "size": 1422,
+      "non_empty": true
+    },
+    "backend/requirements-prod.txt": {
+      "description": "Python生产依赖",
+      "exists": true,
+      "size": 834,
+      "non_empty": true
+    },
+    "frontend/package.json": {
+      "description": "Node.js依赖",
+      "exists": true,
+      "size": 1606,
+      "non_empty": true
+    },
+    "nginx/nginx.conf": {
+      "description": "Nginx主配置",
+      "exists": true,
+      "size": 5875,
+      "non_empty": true
+    },
+    "nginx/conf.d/ssl-manager-production.conf": {
+      "description": "Nginx生产配置",
+      "exists": true,
+      "size": 9529,
+      "non_empty": true
+    },
+    ".env.production.example": {
+      "description": "生产环境变量模板",
+      "exists": true,
+      "size": 6797,
+      "non_empty": true
+    }
+  },
+  "summary": {
+    "total_issues": 7,
+    "critical_issues": 0,
+    "status": "warning"
+  }
+}

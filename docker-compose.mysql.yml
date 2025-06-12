@@ -1,0 +1,188 @@
+version: '3.8'
+
+services:
+  # MySQL 8.0.41 数据库服务
+  mysql:
+    image: mysql:8.0.41
+    container_name: ssl_manager_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-ssl_manager_root_password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-ssl_manager}
+      MYSQL_USER: ${MYSQL_USER:-ssl_manager}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ssl_manager_password}
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./backend/database/init_mysql.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./mysql/conf.d:/etc/mysql/conf.d:ro
+      - ./mysql/logs:/var/log/mysql
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --innodb-buffer-pool-size=256M
+      --innodb-log-file-size=64M
+      --innodb-flush-log-at-trx-commit=2
+      --innodb-flush-method=O_DIRECT
+      --max-connections=200
+      --query-cache-type=1
+      --query-cache-size=32M
+      --slow-query-log=1
+      --slow-query-log-file=/var/log/mysql/slow.log
+      --long-query-time=2
+      --log-error=/var/log/mysql/error.log
+      --general-log=0
+    networks:
+      - ssl_manager_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-ssl_manager_root_password}"]
+      timeout: 20s
+      retries: 10
+      interval: 30s
+      start_period: 60s
+
+  # SSL证书管理后端服务
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ssl_manager_backend
+    restart: unless-stopped
+    environment:
+      # MySQL数据库配置
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: ${MYSQL_USER:-ssl_manager}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ssl_manager_password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-ssl_manager}
+      MYSQL_MAX_CONNECTIONS: 20
+      MYSQL_CONNECT_TIMEOUT: 10
+      MYSQL_READ_TIMEOUT: 30
+      MYSQL_WRITE_TIMEOUT: 30
+      
+      # Flask应用配置
+      FLASK_ENV: ${FLASK_ENV:-production}
+      FLASK_DEBUG: ${FLASK_DEBUG:-false}
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-here}
+      
+      # SSL证书配置
+      CERT_STORAGE_PATH: /app/certs
+      ACME_DIRECTORY_URL: ${ACME_DIRECTORY_URL:-https://acme-v02.api.letsencrypt.org/directory}
+      
+      # 通知配置
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+      
+      # 安全配置
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-jwt-secret-key}
+      CSRF_SECRET_KEY: ${CSRF_SECRET_KEY:-your-csrf-secret-key}
+      
+      # 日志配置
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FILE: /app/logs/ssl_manager.log
+    ports:
+      - "${BACKEND_PORT:-5000}:5000"
+    volumes:
+      - cert_storage:/app/certs
+      - backend_logs:/app/logs
+      - ./backend/config:/app/config:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - ssl_manager_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      timeout: 10s
+      retries: 5
+      interval: 30s
+      start_period: 60s
+
+  # SSL证书管理前端服务
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ssl_manager_frontend
+    restart: unless-stopped
+    environment:
+      VUE_APP_API_BASE_URL: ${VUE_APP_API_BASE_URL:-http://localhost:5000/api}
+      VUE_APP_TITLE: ${VUE_APP_TITLE:-SSL证书管理系统}
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - backend
+    networks:
+      - ssl_manager_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      timeout: 10s
+      retries: 3
+      interval: 30s
+
+  # Nginx反向代理服务
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: ssl_manager_nginx
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - ssl_manager_network
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      timeout: 5s
+      retries: 3
+      interval: 30s
+
+  # Redis缓存服务（可选）
+  redis:
+    image: redis:7.2-alpine
+    container_name: ssl_manager_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-ssl_manager_redis}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - ssl_manager_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      timeout: 3s
+      retries: 5
+      interval: 30s
+
+volumes:
+  mysql_data:
+    driver: local
+  cert_storage:
+    driver: local
+  backend_logs:
+    driver: local
+  nginx_logs:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  ssl_manager_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

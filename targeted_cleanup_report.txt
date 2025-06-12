@@ -1,0 +1,44 @@
+
+SSL证书管理系统 - 目标清理报告
+===============================
+
+清理时间: 2025-06-12T07:58:15.679535
+执行状态: 已执行
+
+清理统计:
+- 总文件数: 12
+- 冗余文件: 7
+- 缓存/临时文件: 5
+- 空文件: 0
+- 受保护文件: 19
+
+清理详情:
+
+冗余文件:
+  - DEPLOYMENT.md (Redundant deployment document (superseded by docs/))
+  - DEPLOYMENT_LOCAL.md (Redundant deployment document (superseded by docs/))
+  - backend/src/models/database_postgres.py (PostgreSQL support removed, migrated to MySQL)
+  - nginx/conf.d/ssl-manager-dev.conf (Redundant nginx configuration)
+  - nginx/conf.d/ssl-manager-prod.conf (Redundant nginx configuration)
+  - nginx/conf.d/ssl-manager-simple.conf (Redundant nginx configuration)
+  - nginx/conf.d/ssl-manager-standalone.conf (Redundant nginx configuration)
+
+缓存和临时文件:
+  - cleanup.log (Temporary/log file: cleanup.log)
+  - backend/src/__pycache__ (Cache/temporary directory: __pycache__)
+  - backend/src/models/__pycache__ (Cache/temporary directory: __pycache__)
+  - backend/src/services/__pycache__ (Cache/temporary directory: __pycache__)
+  - backend/src/utils/__pycache__ (Cache/temporary directory: __pycache__)
+
+受保护的核心文件 (共19个):
+  - README.md
+  - backend/requirements-prod.txt
+  - backend/requirements.txt
+  - backend/src/app.py
+  - backend/src/models/alert.py
+  - backend/src/models/certificate.py
+  - backend/src/models/database.py
+  - backend/src/models/server.py
+  - backend/src/models/user.py
+  - backend/src/services/acme_client.py
+  ... 还有 9 个文件

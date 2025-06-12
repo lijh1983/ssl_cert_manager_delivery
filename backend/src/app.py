@@ -11,7 +11,7 @@ from flask import Flask, request, jsonify, g
 from functools import wraps
 
 # 导入模型
-from models.database import db, init_db
+from models.database import db, init_db, DatabaseConfig
 from models.user import User
 from models.server import Server
 from models.certificate import Certificate
@@ -84,8 +84,14 @@ handle_api_errors(app)
 # 初始化日志中间件
 init_logging_middleware(app)
 
-# 初始化数据库
-init_db()
+# 初始化MySQL数据库
+try:
+    logger.info("初始化MySQL数据库连接...")
+    init_db()
+    logger.info("MySQL数据库初始化完成")
+except Exception as e:
+    logger.error(f"MySQL数据库初始化失败: {e}")
+    raise
 
 # 初始化安全模块
 init_csrf_protection(app)
@@ -472,9 +478,34 @@ def get_servers():
         'max_length': 50,
         'validator': InputValidator.validate_server_name
     },
+    'type': {
+        'required': False,
+        'type': str,
+        'pattern': r'^(nginx|apache|iis|other)$'
+    },
+    'os_type': {
+        'required': False,
+        'type': str,
+        'max_length': 100
+    },
+    'ip': {
+        'required': False,
+        'type': str,
+        'validator': InputValidator.validate_ip_address
+    },
+    'version': {
+        'required': False,
+        'type': str,
+        'max_length': 50
+    },
     'auto_renew': {
         'required': False,
         'type': bool
+    },
+    'description': {
+        'required': False,
+        'type': str,
+        'max_length': 500
     }
 })
 @sanitize_request_data()
@@ -485,7 +516,12 @@ def create_server():
     server = Server.create(
         name=data['name'],
         user_id=g.user.id,
-        auto_renew=data.get('auto_renew', True)
+        server_type=data.get('type', 'nginx'),
+        os_type=data.get('os_type', ''),
+        ip=data.get('ip', ''),
+        version=data.get('version', ''),
+        auto_renew=data.get('auto_renew', True),
+        description=data.get('description', '')
     )
 
     return jsonify({
@@ -494,8 +530,13 @@ def create_server():
         'data': {
             'id': server.id,
             'name': server.name,
+            'type': server.server_type,
+            'os_type': server.os_type,
+            'ip': server.ip,
+            'version': server.version,
             'token': server.token,
             'auto_renew': server.auto_renew,
+            'description': server.description,
             'created_at': server.created_at,
             'install_command': server.get_install_command()
         }
@@ -566,12 +607,15 @@ def update_server(server_id):
     # 只允许更新特定字段
     if 'name' in data:
         server.name = data['name']
-    
+
     if 'auto_renew' in data:
         server.auto_renew = data['auto_renew']
-    
+
+    if 'description' in data:
+        server.description = data['description']
+
     server.save()
-    
+
     return jsonify({
         'code': 200,
         'message': 'success',
@@ -579,6 +623,7 @@ def update_server(server_id):
             'id': server.id,
             'name': server.name,
             'auto_renew': server.auto_renew,
+            'description': server.description,
             'updated_at': server.updated_at
         }
     })
@@ -1007,6 +1052,198 @@ def get_certificate_status(cert_id):
             'data': None
         }), 500
 
+@app.route('/api/v1/certificates/apply', methods=['POST'])
+@login_required
+@moderate_rate_limit
+@csrf_protect
+@api_error_handler
+@validate_json_request(
+    required_fields=['domain', 'ca_type', 'encryption_algorithm'],
+    optional_fields=['description']
+)
+def apply_free_certificate():
+    """免费申请证书"""
+    data = request.get_json()
+
+    domain = data['domain']
+    ca_type = data['ca_type']  # google, letsencrypt, zerossl
+    encryption_algorithm = data['encryption_algorithm']  # ecc, rsa
+    description = data.get('description', '')
+
+    try:
+        # 生成DNS验证记录
+        verification_info = certificate_service.generate_dns_verification(
+            domain=domain,
+            ca_type=ca_type
+        )
+
+        # 创建证书申请记录
+        cert = Certificate.create(
+            domain=domain,
+            ca_type=ca_type,
+            type='single' if not domain.startswith('*.') else 'wildcard',
+            validation_method='dns',
+            user_id=g.user.id,
+            status='pending_verification',
+            description=description
+        )
+
+        return jsonify({
+            'code': 200,
+            'message': 'success',
+            'data': {
+                'certificate_id': cert.id,
+                'domain': domain,
+                'verification_info': verification_info,
+                'status': 'pending_verification'
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"证书申请失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': '证书申请失败',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/certificates/<int:cert_id>/verify-domain', methods=['POST'])
+@login_required
+@moderate_rate_limit
+@csrf_protect
+def verify_domain(cert_id):
+    """验证域名所有权"""
+    cert = Certificate.get_by_id(cert_id)
+    if not cert:
+        return jsonify({
+            'code': 404,
+            'message': '证书不存在',
+            'data': None
+        }), 404
+
+    # 权限检查
+    if not g.user.is_admin() and cert.user_id != g.user.id:
+        return jsonify({
+            'code': 403,
+            'message': '权限不足',
+            'data': None
+        }), 403
+
+    try:
+        # 执行域名验证
+        result = certificate_service.verify_domain_ownership(cert_id)
+
+        if result['success']:
+            # 验证成功，开始申请证书
+            cert_result = certificate_service.issue_certificate(cert_id)
+
+            if cert_result['success']:
+                return jsonify({
+                    'code': 200,
+                    'message': '域名验证通过，证书申请成功',
+                    'data': {
+                        'certificate_id': cert_id,
+                        'status': 'issued',
+                        'expires_at': cert_result.get('expires_at')
+                    }
+                })
+            else:
+                return jsonify({
+                    'code': 400,
+                    'message': f'证书申请失败: {cert_result["error"]}',
+                    'data': None
+                }), 400
+        else:
+            return jsonify({
+                'code': 400,
+                'message': '域名验证未通过，请检查配置或稍后再试',
+                'data': {
+                    'error': result.get('error'),
+                    'details': result.get('details')
+                }
+            }), 400
+
+    except Exception as e:
+        logger.error(f"域名验证失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': '域名验证失败',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/certificates/<int:cert_id>/download', methods=['GET'])
+@login_required
+def download_certificate(cert_id):
+    """下载证书文件"""
+    cert = Certificate.get_by_id(cert_id)
+    if not cert:
+        return jsonify({
+            'code': 404,
+            'message': '证书不存在',
+            'data': None
+        }), 404
+
+    # 权限检查
+    if not g.user.is_admin() and cert.user_id != g.user.id:
+        return jsonify({
+            'code': 403,
+            'message': '权限不足',
+            'data': None
+        }), 403
+
+    format_type = request.args.get('format', 'pem')
+
+    try:
+        # 生成下载文件
+        download_data = certificate_service.generate_download_files(cert_id, format_type)
+
+        return jsonify({
+            'code': 200,
+            'message': 'success',
+            'data': {
+                'download_url': download_data['download_url'],
+                'filename': download_data['filename'],
+                'format': format_type,
+                'size': download_data['size'],
+                'expires_at': download_data['expires_at']
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"证书下载失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': '证书下载失败',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/certificates/expired', methods=['DELETE'])
+@login_required
+@csrf_protect
+def delete_expired_certificates():
+    """删除失效证书"""
+    try:
+        # 获取用户的失效证书
+        user_id = None if g.user.is_admin() else g.user.id
+        result = certificate_service.delete_expired_certificates(user_id)
+
+        return jsonify({
+            'code': 200,
+            'message': 'success',
+            'data': {
+                'deleted_count': result['deleted_count'],
+                'deleted_certificates': result['deleted_certificates']
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"删除失效证书失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': '删除失效证书失败',
+            'data': None
+        }), 500
+
 @app.route('/api/v1/certificates/auto-renew', methods=['POST'])
 @login_required
 @admin_required
@@ -1029,6 +1266,368 @@ def auto_renew_certificates():
         return jsonify({
             'code': 500,
             'message': '自动续期失败',
+            'data': None
+        }), 500
+
+# ==========================================
+# 证书监控API
+# ==========================================
+
+@app.route('/api/v1/monitoring', methods=['GET'])
+@login_required
+def get_monitoring_list():
+    """获取证书监控列表"""
+    page = int(request.args.get('page', 1))
+    limit = int(request.args.get('limit', 20))
+    keyword = request.args.get('keyword')
+    status = request.args.get('status')
+
+    try:
+        # 获取用户的监控配置
+        user_id = None if g.user.is_admin() else g.user.id
+        result = domain_monitoring_service.get_monitoring_list(
+            page=page,
+            limit=limit,
+            keyword=keyword,
+            status=status,
+            user_id=user_id
+        )
+
+        return jsonify({
+            'code': 200,
+            'message': 'success',
+            'data': {
+                'total': result['total'],
+                'page': page,
+                'limit': limit,
+                'items': result['items']
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"获取监控列表失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': '获取监控列表失败',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/monitoring', methods=['POST'])
+@login_required
+@moderate_rate_limit
+@csrf_protect
+@validate_request_data({
+    'domain': {
+        'required': True,
+        'type': str,
+        'validator': InputValidator.validate_domain
+    },
+    'port': {
+        'required': False,
+        'type': int,
+        'min_value': 1,
+        'max_value': 65535
+    },
+    'ip_type': {
+        'required': False,
+        'type': str,
+        'pattern': r'^(ipv4|ipv6)$'
+    },
+    'ip_address': {
+        'required': False,
+        'type': str
+    },
+    'monitoring_enabled': {
+        'required': False,
+        'type': bool
+    },
+    'description': {
+        'required': False,
+        'type': str,
+        'max_length': 500
+    }
+})
+def create_monitoring():
+    """创建监控配置"""
+    data = request.get_json()
+
+    try:
+        result = domain_monitoring_service.create_monitoring_config(
+            domain=data['domain'],
+            port=data.get('port', 443),
+            ip_type=data.get('ip_type', 'ipv4'),
+            ip_address=data.get('ip_address'),
+            monitoring_enabled=data.get('monitoring_enabled', True),
+            description=data.get('description', ''),
+            user_id=g.user.id
+        )
+
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': 'success',
+                'data': result['monitoring_config']
+            })
+        else:
+            return jsonify({
+                'code': 400,
+                'message': result['error'],
+                'data': None
+            }), 400
+
+    except Exception as e:
+        logger.error(f"创建监控配置失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': '创建监控配置失败',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/monitoring/<int:monitoring_id>', methods=['GET'])
+@login_required
+def get_monitoring_detail(monitoring_id):
+    """获取监控详情"""
+    try:
+        result = domain_monitoring_service.get_monitoring_detail(monitoring_id)
+
+        if result['success']:
+            # 权限检查
+            monitoring_config = result['monitoring_config']
+            if not g.user.is_admin() and monitoring_config.get('user_id') != g.user.id:
+                return jsonify({
+                    'code': 403,
+                    'message': '权限不足',
+                    'data': None
+                }), 403
+
+            return jsonify({
+                'code': 200,
+                'message': 'success',
+                'data': result['monitoring_config']
+            })
+        else:
+            return jsonify({
+                'code': 404,
+                'message': '监控配置不存在',
+                'data': None
+            }), 404
+
+    except Exception as e:
+        logger.error(f"获取监控详情失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': '获取监控详情失败',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/monitoring/<int:monitoring_id>', methods=['PUT'])
+@login_required
+@csrf_protect
+@validate_request_data({
+    'monitoring_enabled': {
+        'required': False,
+        'type': bool
+    },
+    'description': {
+        'required': False,
+        'type': str,
+        'max_length': 500
+    }
+})
+def update_monitoring(monitoring_id):
+    """更新监控配置"""
+    data = request.get_json()
+
+    try:
+        # 权限检查
+        monitoring_detail = domain_monitoring_service.get_monitoring_detail(monitoring_id)
+        if not monitoring_detail['success']:
+            return jsonify({
+                'code': 404,
+                'message': '监控配置不存在',
+                'data': None
+            }), 404
+
+        monitoring_config = monitoring_detail['monitoring_config']
+        if not g.user.is_admin() and monitoring_config.get('user_id') != g.user.id:
+            return jsonify({
+                'code': 403,
+                'message': '权限不足',
+                'data': None
+            }), 403
+
+        # 更新监控配置
+        result = domain_monitoring_service.update_monitoring_config(monitoring_id, data)
+
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': 'success',
+                'data': result['monitoring_config']
+            })
+        else:
+            return jsonify({
+                'code': 400,
+                'message': result['error'],
+                'data': None
+            }), 400
+
+    except Exception as e:
+        logger.error(f"更新监控配置失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': '更新监控配置失败',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/monitoring/<int:monitoring_id>', methods=['DELETE'])
+@login_required
+@csrf_protect
+def delete_monitoring(monitoring_id):
+    """删除监控配置"""
+    try:
+        # 权限检查
+        monitoring_detail = domain_monitoring_service.get_monitoring_detail(monitoring_id)
+        if not monitoring_detail['success']:
+            return jsonify({
+                'code': 404,
+                'message': '监控配置不存在',
+                'data': None
+            }), 404
+
+        monitoring_config = monitoring_detail['monitoring_config']
+        if not g.user.is_admin() and monitoring_config.get('user_id') != g.user.id:
+            return jsonify({
+                'code': 403,
+                'message': '权限不足',
+                'data': None
+            }), 403
+
+        # 删除监控配置
+        result = domain_monitoring_service.delete_monitoring_config(monitoring_id)
+
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': 'success',
+                'data': None
+            })
+        else:
+            return jsonify({
+                'code': 400,
+                'message': result['error'],
+                'data': None
+            }), 400
+
+    except Exception as e:
+        logger.error(f"删除监控配置失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': '删除监控配置失败',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/monitoring/<int:monitoring_id>/check', methods=['POST'])
+@login_required
+@moderate_rate_limit
+@csrf_protect
+def check_monitoring(monitoring_id):
+    """立即检测证书"""
+    try:
+        # 权限检查
+        monitoring_detail = domain_monitoring_service.get_monitoring_detail(monitoring_id)
+        if not monitoring_detail['success']:
+            return jsonify({
+                'code': 404,
+                'message': '监控配置不存在',
+                'data': None
+            }), 404
+
+        monitoring_config = monitoring_detail['monitoring_config']
+        if not g.user.is_admin() and monitoring_config.get('user_id') != g.user.id:
+            return jsonify({
+                'code': 403,
+                'message': '权限不足',
+                'data': None
+            }), 403
+
+        # 执行检测
+        result = domain_monitoring_service.perform_immediate_check(monitoring_id)
+
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': '证书检测完成',
+                'data': result['check_result']
+            })
+        else:
+            return jsonify({
+                'code': 400,
+                'message': result['error'],
+                'data': None
+            }), 400
+
+    except Exception as e:
+        logger.error(f"证书检测失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': '证书检测失败',
+            'data': None
+        }), 500
+
+@app.route('/api/v1/monitoring/<int:monitoring_id>/history', methods=['GET'])
+@login_required
+def get_monitoring_history(monitoring_id):
+    """获取监控历史"""
+    page = int(request.args.get('page', 1))
+    limit = int(request.args.get('limit', 50))
+
+    try:
+        # 权限检查
+        monitoring_detail = domain_monitoring_service.get_monitoring_detail(monitoring_id)
+        if not monitoring_detail['success']:
+            return jsonify({
+                'code': 404,
+                'message': '监控配置不存在',
+                'data': None
+            }), 404
+
+        monitoring_config = monitoring_detail['monitoring_config']
+        if not g.user.is_admin() and monitoring_config.get('user_id') != g.user.id:
+            return jsonify({
+                'code': 403,
+                'message': '权限不足',
+                'data': None
+            }), 403
+
+        # 获取监控历史
+        result = domain_monitoring_service.get_monitoring_history(
+            monitoring_id, page, limit
+        )
+
+        if result['success']:
+            return jsonify({
+                'code': 200,
+                'message': 'success',
+                'data': {
+                    'total': result['total'],
+                    'page': page,
+                    'limit': limit,
+                    'items': result['history']
+                }
+            })
+        else:
+            return jsonify({
+                'code': 400,
+                'message': result['error'],
+                'data': None
+            }), 400
+
+    except Exception as e:
+        logger.error(f"获取监控历史失败: {e}")
+        return jsonify({
+            'code': 500,
+            'message': '获取监控历史失败',
             'data': None
         }), 500
 
@@ -1849,13 +2448,15 @@ def internal_error(error):
     }), 500
 
 # 健康检查和监控端点
-@app.route('/health', methods=['GET'])
+@app.route('/api/health', methods=['GET'])
 def health_check():
     """健康检查端点"""
     try:
         # 检查数据库连接
-        db.session.execute('SELECT 1')
+        db.connect()
+        db.fetchone('SELECT 1')
         db_status = 'healthy'
+        db.close()
     except Exception as e:
         db_status = f'unhealthy: {str(e)}'
 
@@ -1916,7 +2517,9 @@ def readiness_check():
     """就绪检查端点"""
     try:
         # 检查数据库是否就绪
-        db.session.execute('SELECT COUNT(*) FROM users')
+        db.connect()
+        db.fetchone('SELECT COUNT(*) FROM users')
+        db.close()
 
         # 检查关键服务是否就绪
         ready = (
@@ -2717,7 +3320,7 @@ def manual_check_certificate(certificate_id):
             'data': None
         }), 500
 
-@app.route('/api/v1/certificates/<int:certificate_id>/renew', methods=['POST'])
+@app.route('/api/v1/certificates/<int:certificate_id>/manual-renew', methods=['POST'])
 @login_required
 @admin_required
 @moderate_rate_limit
@@ -2728,7 +3331,7 @@ def manual_check_certificate(certificate_id):
         'type': bool
     }
 })
-def renew_certificate(certificate_id):
+def manual_renew_certificate(certificate_id):
     """手动续期证书"""
     try:
         data = request.get_json() or {}

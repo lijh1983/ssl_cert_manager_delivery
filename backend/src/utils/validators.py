@@ -100,9 +100,22 @@ class InputValidator:
         """验证URL格式"""
         if not isinstance(url, str):
             return False
-        
+
         pattern = r'^https?://(?:[-\w.])+(?::[0-9]+)?(?:/(?:[\w/_.])*(?:\?(?:[\w&=%.])*)?(?:#(?:[\w.])*)?)?$'
         return bool(re.match(pattern, url))
+
+    @staticmethod
+    def validate_server_name(name: str) -> bool:
+        """验证服务器名称"""
+        if not isinstance(name, str):
+            return False
+
+        if len(name) < 2 or len(name) > 100:
+            return False
+
+        # 服务器名称可以包含字母、数字、中文、下划线、连字符和空格
+        pattern = r'^[\w\u4e00-\u9fa5\-\s]+$'
+        return bool(re.match(pattern, name))
 
 
 class DataSanitizer:

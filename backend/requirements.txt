@@ -39,9 +39,10 @@ urllib3==2.0.4
 # System Information
 psutil==5.9.5
 
-# Database Support
-psycopg2-binary==2.9.9
+# Database Support - MySQL 8.0.41
+PyMySQL==1.1.0
 SQLAlchemy==2.0.23
+mysql-connector-python==8.2.0
 
 # SSL/TLS Support
 pyOpenSSL==23.2.0

@@ -61,10 +61,5 @@ CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status);
 CREATE INDEX IF NOT EXISTS idx_alerts_created_at ON alerts(created_at);
 
 -- 插入示例数据
-INSERT OR IGNORE INTO servers (id, name, ip_address, username) VALUES 
+INSERT OR IGNORE INTO servers (id, name, ip_address, username) VALUES
 (1, '默认服务器', '127.0.0.1', 'root');
-
--- 添加注释
-COMMENT ON TABLE servers IS '服务器信息表';
-COMMENT ON TABLE certificates IS 'SSL证书信息表';
-COMMENT ON TABLE alerts IS '告警信息表';

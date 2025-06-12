@@ -666,3 +666,337 @@ class DomainMonitoringService:
         finally:
             if 'conn' in locals():
                 conn.close()
+
+    def get_monitoring_list(self, page: int = 1, limit: int = 20,
+                          keyword: str = None, status: str = None,
+                          user_id: int = None) -> Dict[str, Any]:
+        """获取监控列表"""
+        try:
+            # 模拟数据
+            mock_data = [
+                {
+                    'id': 1,
+                    'domain': 'example.com',
+                    'cert_level': 'DV',
+                    'encryption_type': 'RSA',
+                    'port': 443,
+                    'ip_type': 'IPv4',
+                    'ip_address': '192.168.1.100',
+                    'status': 'normal',
+                    'days_left': 45,
+                    'monitoring_enabled': True,
+                    'description': '主站点监控',
+                    'user_id': 1,
+                    'created_at': '2025-01-01 10:00:00',
+                    'updated_at': '2025-01-10 10:00:00'
+                },
+                {
+                    'id': 2,
+                    'domain': 'api.example.com',
+                    'cert_level': 'OV',
+                    'encryption_type': 'ECC',
+                    'port': 443,
+                    'ip_type': 'IPv4',
+                    'ip_address': '192.168.1.101',
+                    'status': 'warning',
+                    'days_left': 10,
+                    'monitoring_enabled': True,
+                    'description': 'API接口监控',
+                    'user_id': 1,
+                    'created_at': '2025-01-01 10:00:00',
+                    'updated_at': '2025-01-10 10:00:00'
+                }
+            ]
+
+            # 过滤数据
+            filtered_data = mock_data
+            if keyword:
+                filtered_data = [item for item in filtered_data
+                               if keyword.lower() in item['domain'].lower()]
+            if status:
+                filtered_data = [item for item in filtered_data
+                               if item['status'] == status]
+            if user_id:
+                filtered_data = [item for item in filtered_data
+                               if item['user_id'] == user_id]
+
+            # 分页
+            start = (page - 1) * limit
+            end = start + limit
+            items = filtered_data[start:end]
+
+            return {
+                'total': len(filtered_data),
+                'items': items
+            }
+
+        except Exception as e:
+            logger.error(f"获取监控列表失败: {e}")
+            raise
+
+    def create_monitoring_config(self, domain: str, port: int = 443,
+                               ip_type: str = 'ipv4', ip_address: str = None,
+                               monitoring_enabled: bool = True,
+                               description: str = '', user_id: int = None) -> Dict[str, Any]:
+        """创建监控配置"""
+        try:
+            # 验证域名格式
+            if not self._validate_domain_format(domain):
+                return {
+                    'success': False,
+                    'error': '域名格式不正确'
+                }
+
+            # 检查域名是否已存在
+            existing = self._check_domain_exists_for_user(domain, user_id)
+            if existing:
+                return {
+                    'success': False,
+                    'error': '该域名已存在监控配置'
+                }
+
+            # 创建监控配置
+            monitoring_config = {
+                'id': 3,  # 模拟新ID
+                'domain': domain,
+                'port': port,
+                'ip_type': ip_type,
+                'ip_address': ip_address,
+                'monitoring_enabled': monitoring_enabled,
+                'description': description,
+                'user_id': user_id,
+                'status': 'unknown',
+                'days_left': 0,
+                'created_at': datetime.now().isoformat(),
+                'updated_at': datetime.now().isoformat()
+            }
+
+            # 如果启用监控，立即执行一次检测
+            if monitoring_enabled:
+                check_result = self._perform_ssl_check_simple(domain, port)
+                monitoring_config.update({
+                    'status': check_result['status'],
+                    'days_left': check_result['days_left'],
+                    'cert_level': check_result.get('cert_level', 'DV'),
+                    'encryption_type': check_result.get('encryption_type', 'RSA')
+                })
+
+            return {
+                'success': True,
+                'monitoring_config': monitoring_config
+            }
+
+        except Exception as e:
+            logger.error(f"创建监控配置失败: {e}")
+            return {
+                'success': False,
+                'error': f'创建监控配置失败: {str(e)}'
+            }
+
+    def get_monitoring_detail(self, monitoring_id: int) -> Dict[str, Any]:
+        """获取监控详情"""
+        try:
+            # 模拟获取详情
+            if monitoring_id == 1:
+                monitoring_config = {
+                    'id': 1,
+                    'domain': 'example.com',
+                    'cert_level': 'DV',
+                    'encryption_type': 'RSA',
+                    'port': 443,
+                    'ip_type': 'IPv4',
+                    'ip_address': '192.168.1.100',
+                    'status': 'normal',
+                    'days_left': 45,
+                    'monitoring_enabled': True,
+                    'description': '主站点监控',
+                    'user_id': 1,
+                    'created_at': '2025-01-01 10:00:00',
+                    'updated_at': '2025-01-10 10:00:00'
+                }
+                return {
+                    'success': True,
+                    'monitoring_config': monitoring_config
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': '监控配置不存在'
+                }
+
+        except Exception as e:
+            logger.error(f"获取监控详情失败: {e}")
+            return {
+                'success': False,
+                'error': f'获取监控详情失败: {str(e)}'
+            }
+
+    def update_monitoring_config(self, monitoring_id: int, data: Dict[str, Any]) -> Dict[str, Any]:
+        """更新监控配置"""
+        try:
+            # 模拟更新
+            monitoring_config = {
+                'id': monitoring_id,
+                'domain': 'example.com',
+                'monitoring_enabled': data.get('monitoring_enabled', True),
+                'description': data.get('description', ''),
+                'updated_at': datetime.now().isoformat()
+            }
+
+            return {
+                'success': True,
+                'monitoring_config': monitoring_config
+            }
+
+        except Exception as e:
+            logger.error(f"更新监控配置失败: {e}")
+            return {
+                'success': False,
+                'error': f'更新监控配置失败: {str(e)}'
+            }
+
+    def delete_monitoring_config(self, monitoring_id: int) -> Dict[str, Any]:
+        """删除监控配置"""
+        try:
+            # 模拟删除
+            return {
+                'success': True,
+                'message': '监控配置已删除'
+            }
+
+        except Exception as e:
+            logger.error(f"删除监控配置失败: {e}")
+            return {
+                'success': False,
+                'error': f'删除监控配置失败: {str(e)}'
+            }
+
+    def perform_immediate_check(self, monitoring_id: int) -> Dict[str, Any]:
+        """执行立即检测"""
+        try:
+            # 获取监控配置
+            detail_result = self.get_monitoring_detail(monitoring_id)
+            if not detail_result['success']:
+                return detail_result
+
+            monitoring_config = detail_result['monitoring_config']
+            domain = monitoring_config['domain']
+            port = monitoring_config['port']
+
+            # 执行SSL检测
+            check_result = self._perform_ssl_check_simple(domain, port)
+
+            return {
+                'success': True,
+                'check_result': check_result
+            }
+
+        except Exception as e:
+            logger.error(f"立即检测失败: {e}")
+            return {
+                'success': False,
+                'error': f'立即检测失败: {str(e)}'
+            }
+
+    def get_monitoring_history(self, monitoring_id: int, page: int = 1, limit: int = 50) -> Dict[str, Any]:
+        """获取监控历史"""
+        try:
+            # 模拟历史数据
+            mock_history = [
+                {
+                    'id': 1,
+                    'check_time': '2025-01-10 10:00:00',
+                    'status': 'normal',
+                    'days_left': 45,
+                    'response_time': 120,
+                    'ssl_version': 'TLSv1.3',
+                    'message': '证书正常'
+                },
+                {
+                    'id': 2,
+                    'check_time': '2025-01-09 10:00:00',
+                    'status': 'normal',
+                    'days_left': 46,
+                    'response_time': 115,
+                    'ssl_version': 'TLSv1.3',
+                    'message': '证书正常'
+                },
+                {
+                    'id': 3,
+                    'check_time': '2025-01-08 10:00:00',
+                    'status': 'warning',
+                    'days_left': 47,
+                    'response_time': 200,
+                    'ssl_version': 'TLSv1.2',
+                    'message': '响应时间较慢'
+                }
+            ]
+
+            # 分页
+            start = (page - 1) * limit
+            end = start + limit
+            items = mock_history[start:end]
+
+            return {
+                'success': True,
+                'total': len(mock_history),
+                'history': items
+            }
+
+        except Exception as e:
+            logger.error(f"获取监控历史失败: {e}")
+            return {
+                'success': False,
+                'error': f'获取监控历史失败: {str(e)}'
+            }
+
+    def _validate_domain_format(self, domain: str) -> bool:
+        """验证域名格式"""
+        import re
+        pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$'
+        return bool(re.match(pattern, domain))
+
+    def _check_domain_exists_for_user(self, domain: str, user_id: int) -> bool:
+        """检查域名是否已存在"""
+        # 模拟检查
+        return False
+
+    def _perform_ssl_check_simple(self, domain: str, port: int) -> Dict[str, Any]:
+        """执行简单的SSL检测"""
+        try:
+            import random
+
+            # 模拟SSL检测
+            statuses = ['normal', 'warning', 'error']
+            status = random.choice(statuses)
+
+            if status == 'normal':
+                days_left = random.randint(30, 90)
+            elif status == 'warning':
+                days_left = random.randint(7, 29)
+            else:
+                days_left = random.randint(0, 6)
+
+            return {
+                'status': status,
+                'days_left': days_left,
+                'response_time': random.randint(50, 300),
+                'ssl_version': random.choice(['TLSv1.2', 'TLSv1.3']),
+                'cert_level': random.choice(['DV', 'OV', 'EV']),
+                'encryption_type': random.choice(['RSA', 'ECC']),
+                'message': '证书检测完成'
+            }
+
+        except Exception as e:
+            logger.error(f"SSL检测失败: {e}")
+            return {
+                'status': 'error',
+                'days_left': 0,
+                'response_time': 0,
+                'ssl_version': 'unknown',
+                'message': f'检测失败: {str(e)}'
+            }
+
+
+# 全局域名监控服务实例
+domain_monitoring_service = DomainMonitoringService()
