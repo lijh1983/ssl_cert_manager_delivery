@@ -143,10 +143,41 @@ docker stats --no-stream && free -h
 - 📊 **证书监控**: 内置SSL证书状态监控和到期提醒
 - 🔄 **自动部署**: 证书自动部署到多个服务器
 - 📱 **Web管理界面**: 直观的证书管理界面
-- 🗄️ **PostgreSQL数据库**: 高性能数据存储
+- 🗄️ **MySQL 8.0.41数据库**: 企业级高性能数据存储
 - 🚨 **告警系统**: 证书过期提醒和状态告警
 
 ## 🏗️ 系统架构
+
+### 技术栈
+
+**后端**:
+- Python 3.11+ / Flask
+- SQLAlchemy ORM
+- MySQL 8.0.41 数据库 (专用)
+- Redis 7.2 缓存
+- Celery 异步任务队列
+- Let's Encrypt ACME协议
+- JWT认证 + CSRF保护
+- PyMySQL 数据库驱动
+
+**前端**:
+- Vue.js 3 + TypeScript
+- Element Plus UI组件库
+- Vite 4.4+ 构建工具
+- Pinia 状态管理
+- Axios HTTP客户端
+- ECharts 数据可视化
+- 响应式设计 + PWA支持
+
+**部署**:
+- Docker + Docker Compose
+- Nginx 反向代理 + 负载均衡
+- MySQL 8.0.41 高可用配置
+- 支持阿里云ECS部署
+- 支持本地化部署
+- 企业级监控和日志
+
+### 架构图
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
@@ -155,7 +186,7 @@ docker stats --no-stream && free -h
 └─────────────────┘    └─────────────────┘    └─────────────────┘
          │                       │                       │
          │              ┌─────────────────┐    ┌─────────────────┐
-         │              │   PostgreSQL    │    │      Redis      │
+         │              │   MySQL 8.0.41 │    │    Redis 7.2    │
          │              │   (Database)    │    │     (Cache)     │
          │              └─────────────────┘    └─────────────────┘
          │
@@ -275,7 +306,7 @@ ssl_cert_manager_delivery/
 1. **域名配置**: 确保域名 `ssl.gzyggl.com` 正确解析到服务器
 2. **防火墙**: 开放80和443端口
 3. **SSL证书**: 系统会自动申请和续期Let's Encrypt证书
-4. **备份策略**: 定期备份PostgreSQL数据库和SSL证书
+4. **备份策略**: 定期备份MySQL数据库和SSL证书
 5. **监控**: 启用Prometheus和Grafana监控
 6. **日志**: 定期清理和归档应用日志
 

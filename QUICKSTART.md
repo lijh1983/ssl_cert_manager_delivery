@@ -9,6 +9,9 @@
 - 16GB+ 内存，4+ CPU核心
 - 40GB+ 磁盘空间
 - 支持cgroup v2
+- MySQL 8.0.41 (自动部署)
+- Redis 7.2 (自动部署)
+- Docker 26.1.3+ & Docker Compose v2.24.0+
 
 ### 快速部署命令
 
