@@ -47,7 +47,7 @@ RUN echo "=== 更新系统包 ===" && \
         pkg-config \
         libssl-dev \
         libffi-dev \
-        libpq-dev \
+        default-libmysqlclient-dev \
         ca-certificates \
         && \
     echo "=== 系统包安装完成 ==="

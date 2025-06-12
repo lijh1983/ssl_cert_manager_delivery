@@ -82,10 +82,10 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile produc
 
 ```bash
 # 备份数据库
-docker exec ssl-manager-postgres pg_dump -U ssl_user ssl_manager > backup_$(date +%Y%m%d_%H%M%S).sql
+docker exec ssl-manager-mysql mysqldump -u ssl_manager -p ssl_manager > backup_$(date +%Y%m%d_%H%M%S).sql
 
 # 查看数据库表
-docker exec ssl-manager-postgres psql -U ssl_user -d ssl_manager -c "\dt"
+docker exec ssl-manager-mysql mysql -u ssl_manager -p ssl_manager -e "SHOW TABLES;"
 
 # 检查Redis状态
 docker exec ssl-manager-redis redis-cli ping
@@ -196,12 +196,12 @@ docker stats --no-stream
 **3. 数据库连接失败**
 ```bash
 # 检查数据库容器状态
-docker ps | grep postgres
+docker ps | grep mysql
 
 # 重新初始化数据库
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml down
-docker volume rm workspace_postgres_data
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d postgres
+docker volume rm workspace_mysql_data
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d mysql
 ```
 
 **4. 端口占用冲突**

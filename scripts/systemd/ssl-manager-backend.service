@@ -5,9 +5,9 @@
 [Unit]
 Description=SSL Certificate Manager Backend API
 Documentation=https://github.com/lijh1983/ssl_cert_manager_delivery
-After=network.target postgresql.service redis.service
+After=network.target mysql.service redis.service
 Wants=network.target
-Requires=postgresql.service
+Requires=mysql.service
 
 [Service]
 Type=exec

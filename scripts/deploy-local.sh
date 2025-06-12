@@ -54,7 +54,7 @@ check_images() {
         "ssl-manager-backend:latest"
         "ssl-manager-frontend:latest"
         "ssl-manager-nginx-proxy:latest"
-        "postgres:15-alpine"
+        "mysql:8.0.41"
         "redis:7-alpine"
     )
     

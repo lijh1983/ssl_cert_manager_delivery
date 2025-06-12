@@ -763,23 +763,23 @@ services:
 #### 2. 数据库性能优化
 
 ```bash
-# PostgreSQL性能参数
+# MySQL性能参数
 docker run -d \
-  --name ssl-manager-postgres \
-  -e POSTGRES_DB=ssl_manager \
-  -e POSTGRES_USER=ssl_user \
-  -e POSTGRES_PASSWORD=your-password \
-  registry.cn-hangzhou.aliyuncs.com/library/postgres:15-alpine \
-  postgres \
-  -c shared_buffers=256MB \
-  -c effective_cache_size=1GB \
-  -c maintenance_work_mem=64MB \
-  -c checkpoint_completion_target=0.9 \
-  -c wal_buffers=16MB \
-  -c default_statistics_target=100 \
-  -c random_page_cost=1.1 \
-  -c effective_io_concurrency=200 \
-  -c work_mem=4MB
+  --name ssl-manager-mysql \
+  -e MYSQL_ROOT_PASSWORD=your-root-password \
+  -e MYSQL_DATABASE=ssl_manager \
+  -e MYSQL_USER=ssl_manager \
+  -e MYSQL_PASSWORD=your-password \
+  registry.cn-hangzhou.aliyuncs.com/library/mysql:8.0.41 \
+  --innodb-buffer-pool-size=256M \
+  --innodb-log-file-size=64M \
+  --innodb-flush-log-at-trx-commit=2 \
+  --innodb-flush-method=O_DIRECT \
+  --max-connections=200 \
+  --query-cache-size=64M \
+  --query-cache-type=1 \
+  --tmp-table-size=64M \
+  --max-heap-table-size=64M
 ```
 
 #### 3. Redis性能优化
@@ -1096,7 +1096,7 @@ certbot --nginx -d your-domain.com
 DATE=$(date +%Y%m%d_%H%M%S)
 
 # 备份数据库
-docker exec ssl-manager-postgres pg_dump -U ssl_user ssl_manager > backup_${DATE}.sql
+docker exec ssl-manager-mysql mysqldump -u ssl_manager -p ssl_manager > backup_${DATE}.sql
 
 # 上传到OSS
 ossutil cp backup_${DATE}.sql oss://your-bucket/backups/
@@ -1218,16 +1218,16 @@ sudo journalctl --vacuum-time=7d
 **问题**: 数据库连接失败
 ```bash
 # 检查数据库状态
-docker logs ssl-manager-postgres
-docker exec ssl-manager-postgres pg_isready -U ssl_user
+docker logs ssl-manager-mysql
+docker exec ssl-manager-mysql mysqladmin ping -h localhost -u ssl_manager -p
 
 # 检查网络连通性
-docker exec ssl-manager-backend nc -zv postgres 5432
+docker exec ssl-manager-backend nc -zv mysql 3306
 
 # 重置数据库
 docker-compose down
-docker volume rm ssl_manager_postgres_data
-docker-compose up -d postgres
+docker volume rm ssl_manager_mysql_data
+docker-compose up -d mysql
 ```
 
 **问题**: 应用启动失败
@@ -1395,15 +1395,15 @@ ab -n 100 -c 10 http://localhost:8000/health
 wrk -t12 -c400 -d30s http://localhost:8000/health
 
 # 数据库性能监控
-docker exec ssl-manager-postgres psql -U ssl_user -d ssl_manager -c "
+docker exec ssl-manager-mysql mysql -u ssl_manager -p ssl_manager -e "
 SELECT
-    schemaname,
-    tablename,
-    attname,
-    n_distinct,
-    correlation
-FROM pg_stats
-WHERE schemaname = 'public';"
+    TABLE_SCHEMA,
+    TABLE_NAME,
+    COLUMN_NAME,
+    CARDINALITY,
+    INDEX_TYPE
+FROM information_schema.STATISTICS
+WHERE TABLE_SCHEMA = 'ssl_manager';"
 ```
 
 ### 自动化监控脚本

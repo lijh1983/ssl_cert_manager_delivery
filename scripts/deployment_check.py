@@ -116,8 +116,6 @@ class DeploymentChecker:
         
         db_files = [
             ('backend/database/init_mysql.sql', True),
-            ('backend/migrations/003_migrate_to_mysql.sql', True),
-            ('backend/scripts/migrate_sqlite_to_mysql.py', True),
             ('backend/scripts/test_mysql_connection.py', True),
         ]
         

@@ -130,7 +130,7 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml restart backend
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production down
 
 # 备份数据库
-docker exec ssl-manager-postgres pg_dump -U ssl_user ssl_manager > backup_$(date +%Y%m%d_%H%M%S).sql
+docker exec ssl-manager-mysql mysqldump -u ssl_manager -p ssl_manager > backup_$(date +%Y%m%d_%H%M%S).sql
 
 # 检查系统资源
 docker stats --no-stream && free -h
@@ -207,11 +207,11 @@ ssl_cert_manager_delivery/
 
 2. **数据库连接失败**
    ```bash
-   # 检查PostgreSQL状态
-   docker exec ssl-manager-postgres pg_isready -U ssl_user -d ssl_manager
-   
+   # 检查MySQL状态
+   docker exec ssl-manager-mysql mysqladmin ping -h localhost -u ssl_manager -p
+
    # 重启数据库
-   docker-compose -f docker-compose.aliyun.yml restart postgres
+   docker-compose -f docker-compose.mysql.yml restart mysql
    ```
 
 3. **网络连接问题**
@@ -252,22 +252,22 @@ ssl_cert_manager_delivery/
 | DOMAIN_NAME | 主域名 | ssl.gzyggl.com |
 | EMAIL | 联系邮箱 | 19822088@qq.com |
 | ENVIRONMENT | 运行环境 | production |
-| DB_NAME | 数据库名 | ssl_manager |
-| DB_USER | 数据库用户 | ssl_user |
-| DB_PASSWORD | 数据库密码 | 随机生成 |
+| MYSQL_DATABASE | 数据库名 | ssl_manager |
+| MYSQL_USER | 数据库用户 | ssl_manager |
+| MYSQL_PASSWORD | 数据库密码 | 随机生成 |
 
 ### 数据持久化
 
-- **PostgreSQL数据**: 保存在Docker卷 `postgres_data`
+- **MySQL数据**: 保存在Docker卷 `mysql_data`
 - **SSL证书**: 保存在Docker卷 `ssl_certs`
 - **应用日志**: 保存在Docker卷 `app_logs`
-- **监控数据**: 保存在Docker卷 `prometheus_data` 和 `grafana_data`
+- **Redis缓存**: 保存在Docker卷 `redis_data`
 
 ### 安全配置
 
 - 使用bcrypt哈希存储密码
-- PostgreSQL外键约束确保数据一致性
-- UUID主键避免ID猜测攻击
+- MySQL外键约束确保数据一致性
+- 自增主键和唯一索引避免数据冲突
 - 完整的操作审计日志
 
 ## 🎯 生产环境建议

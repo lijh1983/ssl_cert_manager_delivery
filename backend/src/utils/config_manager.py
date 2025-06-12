@@ -9,8 +9,8 @@ from typing import Dict, Any
 
 @dataclass
 class DatabaseConfig:
-    """数据库配置"""
-    url: str = 'sqlite:///ssl_cert_manager.db'
+    """数据库配置 - MySQL专用"""
+    url: str = 'mysql+pymysql://ssl_manager:ssl_manager_password@localhost:3306/ssl_manager?charset=utf8mb4'
     echo: bool = False
 
 

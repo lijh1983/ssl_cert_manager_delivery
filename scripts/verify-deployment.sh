@@ -131,11 +131,11 @@ check_http_endpoints() {
 check_database_connection() {
     log_info "检查数据库连接..."
     
-    # PostgreSQL连接测试
-    if docker exec ssl-manager-postgres pg_isready -U ssl_user -d ssl_manager &> /dev/null; then
-        log_success "PostgreSQL连接正常"
+    # MySQL连接测试
+    if docker exec ssl-manager-mysql mysqladmin ping -h localhost -u ssl_manager -p &> /dev/null; then
+        log_success "MySQL连接正常"
     else
-        log_error "PostgreSQL连接失败"
+        log_error "MySQL连接失败"
         return 1
     fi
     

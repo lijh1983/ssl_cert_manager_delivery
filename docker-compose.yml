@@ -8,7 +8,7 @@
 
 # 数据卷配置
 volumes:
-  postgres_data:
+  mysql_data:
     driver: local
   redis_data:
     driver: local
@@ -23,23 +23,32 @@ volumes:
   # grafana_data: 已移除
 
 services:
-  # PostgreSQL数据库
-  postgres:
-    image: postgres:15-alpine
-    container_name: ssl-manager-postgres
+  # MySQL数据库
+  mysql:
+    image: mysql:8.0.41
+    container_name: ssl-manager-mysql
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${DB_NAME:-ssl_manager}
-      POSTGRES_USER: ${DB_USER:-ssl_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-ssl_password}
-      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-ssl_manager_root_password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-ssl_manager}
+      MYSQL_USER: ${MYSQL_USER:-ssl_manager}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ssl_manager_password}
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./database/init:/docker-entrypoint-initdb.d
+      - mysql_data:/var/lib/mysql
+      - ./backend/database/init_mysql.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./mysql/conf.d:/etc/mysql/conf.d:ro
+      - ./mysql/logs:/var/log/mysql
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "${MYSQL_PORT:-3306}:3306"
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --sql-mode=STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-ssl_user} -d ${DB_NAME:-ssl_manager}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-ssl_manager_root_password}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -81,11 +90,11 @@ services:
       WORKERS: ${BACKEND_WORKERS:-2}
       
       # 数据库配置
-      DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_NAME: ${DB_NAME:-ssl_manager}
-      DB_USER: ${DB_USER:-ssl_user}
-      DB_PASSWORD: ${DB_PASSWORD:-ssl_password}
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-ssl_manager}
+      MYSQL_USER: ${MYSQL_USER:-ssl_manager}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ssl_manager_password}
 
       # Redis配置
       REDIS_HOST: redis
@@ -111,7 +120,7 @@ services:
       - "${BACKEND_PORT:-8000}:8000"
       # 监控端口已移除，专注SSL证书管理功能
     depends_on:
-      postgres:
+      mysql:
         condition: service_healthy
       redis:
         condition: service_healthy

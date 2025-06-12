@@ -11,8 +11,8 @@ class Config:
     # Flask基础配置
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
     
-    # 数据库配置
-    DATABASE_URL = os.environ.get('DATABASE_URL') or 'sqlite:///ssl_cert_manager.db'
+    # 数据库配置 - MySQL专用
+    DATABASE_URL = os.environ.get('DATABASE_URL') or 'mysql+pymysql://ssl_manager:ssl_manager_password@localhost:3306/ssl_manager?charset=utf8mb4'
     
     # JWT配置
     JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY') or SECRET_KEY
@@ -101,13 +101,13 @@ class TestingConfig(Config):
     """测试环境配置"""
     DEBUG = True
     TESTING = True
-    
-    # 测试环境使用内存数据库
-    DATABASE_URL = 'sqlite:///:memory:'
-    
+
+    # 测试环境使用MySQL测试数据库
+    DATABASE_URL = 'mysql+pymysql://ssl_manager:ssl_manager_password@localhost:3306/ssl_manager_test?charset=utf8mb4'
+
     # 测试环境使用较低的加密轮数
     BCRYPT_LOG_ROUNDS = 4
-    
+
     # 测试环境禁用CSRF保护
     WTF_CSRF_ENABLED = False
 

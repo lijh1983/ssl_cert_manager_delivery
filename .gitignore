@@ -61,7 +61,7 @@ acme/
 *.sqlite
 *.sqlite3
 data/
-postgres_data/
+mysql_data/
 
 # 缓存和构建文件
 node_modules/

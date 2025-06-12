@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend', 'src
 
 # 设置测试环境变量
 os.environ['ENVIRONMENT'] = 'test'
-os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
+os.environ['DATABASE_URL'] = 'mysql+pymysql://ssl_manager:ssl_manager_password@localhost:3306/ssl_manager_test?charset=utf8mb4'
 os.environ['SECRET_KEY'] = 'test_secret_key'
 os.environ['LOG_LEVEL'] = 'DEBUG'
 
@@ -25,7 +25,7 @@ def test_app():
     from app import app
     app.config['TESTING'] = True
     app.config['WTF_CSRF_ENABLED'] = False
-    app.config['DATABASE_URL'] = 'sqlite:///:memory:'
+    app.config['DATABASE_URL'] = 'mysql+pymysql://ssl_manager:ssl_manager_password@localhost:3306/ssl_manager_test?charset=utf8mb4'
     
     with app.app_context():
         yield app
@@ -185,7 +185,7 @@ def mock_config():
         config.port = 8000
         
         # 数据库配置
-        config.database.url = 'sqlite:///:memory:'
+        config.database.url = 'mysql+pymysql://ssl_manager:ssl_manager_password@localhost:3306/ssl_manager_test?charset=utf8mb4'
         config.database.echo = False
         
         # 安全配置

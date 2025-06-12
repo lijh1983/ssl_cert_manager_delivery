@@ -155,21 +155,22 @@ CREATE INDEX IF NOT EXISTS idx_alerts_type_status ON alerts(alert_type, status);
 -- 性能监控查询
 -- ==========================================
 
--- 查看索引使用情况（PostgreSQL）
--- SELECT schemaname, tablename, indexname, idx_scan, idx_tup_read, idx_tup_fetch 
--- FROM pg_stat_user_indexes 
--- ORDER BY idx_scan DESC;
+-- 查看索引使用情况（MySQL）
+-- SELECT TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, CARDINALITY
+-- FROM information_schema.STATISTICS
+-- WHERE TABLE_SCHEMA = 'ssl_manager'
+-- ORDER BY CARDINALITY DESC;
 
--- 查看表扫描情况（PostgreSQL）
--- SELECT schemaname, tablename, seq_scan, seq_tup_read, idx_scan, idx_tup_fetch,
---        n_tup_ins, n_tup_upd, n_tup_del
--- FROM pg_stat_user_tables
--- ORDER BY seq_scan DESC;
+-- 查看表扫描情况（MySQL）
+-- SELECT TABLE_SCHEMA, TABLE_NAME, TABLE_ROWS, DATA_LENGTH, INDEX_LENGTH
+-- FROM information_schema.TABLES
+-- WHERE TABLE_SCHEMA = 'ssl_manager'
+-- ORDER BY DATA_LENGTH DESC;
 
 -- 查看慢查询（需要开启慢查询日志）
--- SELECT query, calls, total_time, mean_time, rows
--- FROM pg_stat_statements
--- ORDER BY total_time DESC
+-- SELECT sql_text, exec_count, total_latency, avg_latency
+-- FROM performance_schema.events_statements_summary_by_digest
+-- ORDER BY total_latency DESC
 -- LIMIT 10;
 
 -- ==========================================
@@ -177,31 +178,32 @@ CREATE INDEX IF NOT EXISTS idx_alerts_type_status ON alerts(alert_type, status);
 -- ==========================================
 
 -- 1. 定期分析表统计信息
--- ANALYZE users;
--- ANALYZE servers;
--- ANALYZE certificates;
+-- ANALYZE TABLE users;
+-- ANALYZE TABLE servers;
+-- ANALYZE TABLE certificates;
 
 -- 2. 定期重建索引（如果需要）
--- REINDEX INDEX idx_certificates_expires_at;
+-- ALTER TABLE certificates DROP INDEX idx_certificates_expires_at, ADD INDEX idx_certificates_expires_at (expires_at);
 
 -- 3. 监控索引大小
--- SELECT indexname, pg_size_pretty(pg_relation_size(indexname::regclass)) as size
--- FROM pg_indexes
--- WHERE tablename IN ('users', 'servers', 'certificates')
--- ORDER BY pg_relation_size(indexname::regclass) DESC;
+-- SELECT TABLE_NAME, INDEX_NAME,
+--        ROUND(((INDEX_LENGTH) / 1024 / 1024), 2) AS 'Index Size (MB)'
+-- FROM information_schema.TABLES
+-- WHERE TABLE_SCHEMA = 'ssl_manager' AND TABLE_NAME IN ('users', 'servers', 'certificates')
+-- ORDER BY INDEX_LENGTH DESC;
 
--- 4. 检查未使用的索引
--- SELECT schemaname, tablename, indexname, idx_scan
--- FROM pg_stat_user_indexes
--- WHERE idx_scan = 0
--- ORDER BY schemaname, tablename, indexname;
+-- 4. 检查索引使用情况
+-- SELECT OBJECT_SCHEMA, OBJECT_NAME, INDEX_NAME, COUNT_READ, COUNT_WRITE
+-- FROM performance_schema.table_io_waits_summary_by_index_usage
+-- WHERE OBJECT_SCHEMA = 'ssl_manager'
+-- ORDER BY COUNT_READ ASC;
 
 -- ==========================================
 -- 查询优化建议
 -- ==========================================
 
--- 1. 使用EXPLAIN ANALYZE分析查询计划
--- EXPLAIN ANALYZE SELECT * FROM certificates WHERE expires_at < NOW() + INTERVAL '30 days';
+-- 1. 使用EXPLAIN分析查询计划
+-- EXPLAIN SELECT * FROM certificates WHERE expires_at < NOW() + INTERVAL 30 DAY;
 
 -- 2. 避免SELECT *，只查询需要的字段
 -- 3. 使用LIMIT限制返回结果数量

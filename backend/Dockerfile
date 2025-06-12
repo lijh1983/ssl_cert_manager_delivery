@@ -57,13 +57,13 @@ RUN echo '#!/bin/bash' > /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# 测试数据库连接' >> /usr/local/bin/start.sh && \
     echo 'echo "Testing database connection..."' >> /usr/local/bin/start.sh && \
-    echo 'python -c "from src.models.database_postgres import test_postgres_connection; exit(0 if test_postgres_connection() else 1)"' >> /usr/local/bin/start.sh && \
+    echo 'python -c "from src.models.database import Database; db = Database(); db.connect(); print(\"MySQL connection successful\"); db.close(); exit(0)"' >> /usr/local/bin/start.sh && \
     echo '' >> /usr/local/bin/start.sh && \
     echo '# 启动应用' >> /usr/local/bin/start.sh && \
     echo 'echo "Starting application..."' >> /usr/local/bin/start.sh && \
     echo 'cd /app/src' >> /usr/local/bin/start.sh && \
     echo 'export PYTHONPATH=/app/src:$PYTHONPATH' >> /usr/local/bin/start.sh && \
-    echo 'exec gunicorn --bind 0.0.0.0:8000 --workers ${WORKERS:-2} --worker-class sync --timeout 120 --max-requests 1000 --max-requests-jitter 100 --preload simple_app:app' >> /usr/local/bin/start.sh && \
+    echo 'exec gunicorn --bind 0.0.0.0:8000 --workers ${WORKERS:-2} --worker-class sync --timeout 120 --max-requests 1000 --max-requests-jitter 100 --preload app:app' >> /usr/local/bin/start.sh && \
     chmod +x /usr/local/bin/start.sh
 
 # 切换到应用用户
@@ -80,10 +80,10 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
 ENV ENVIRONMENT=production \
     LOG_LEVEL=INFO \
     WORKERS=2 \
-    DB_HOST=postgres \
-    DB_PORT=5432 \
-    DB_NAME=ssl_manager \
-    DB_USER=ssl_user \
+    MYSQL_HOST=mysql \
+    MYSQL_PORT=3306 \
+    MYSQL_DATABASE=ssl_manager \
+    MYSQL_USER=ssl_manager \
     REDIS_HOST=redis \
     REDIS_PORT=6379
 
