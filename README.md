@@ -7,7 +7,10 @@
 ### 📖 文档导航
 
 - **[快速开始指南](QUICKSTART.md)** - 5分钟快速部署
-- **[详细部署指南](DEPLOYMENT.md)** - 完整部署文档
+- **[技术概览](TECHNICAL_OVERVIEW.md)** - 系统架构和技术栈
+- **[功能特性](SSL_CERTIFICATE_FEATURES.md)** - 核心功能详解
+- **[脚本使用示例](SCRIPT_USAGE_EXAMPLES.md)** - 部署脚本使用指南
+- **[开发规则](DEVELOPMENT_RULES.md)** - 开发和维护规范
 - **[更新日志](update.log)** - 版本更新记录
 
 ### ⚡ 一键部署（推荐）
@@ -21,7 +24,7 @@ cd ssl_cert_manager_delivery
 ./scripts/deploy-production.sh
 ```
 
-**系统要求**: Ubuntu 22.04.5 LTS, 16GB内存, 4核CPU, 支持cgroup v2
+**系统要求**: Ubuntu 22.04.5 LTS, 16GB内存, 4核CPU, Docker 26.1.3+
 
 ### 手动部署
 
@@ -31,39 +34,30 @@ cat > .env <<EOF
 DOMAIN_NAME=ssl.gzyggl.com
 EMAIL=19822088@qq.com
 ENVIRONMENT=production
-DB_NAME=ssl_manager
-DB_USER=ssl_user
-DB_PASSWORD=$(openssl rand -base64 32)
+MYSQL_DATABASE=ssl_manager
+MYSQL_USER=ssl_manager
+MYSQL_PASSWORD=$(openssl rand -base64 32)
 REDIS_PASSWORD=$(openssl rand -base64 32)
-GRAFANA_PASSWORD=$(openssl rand -base64 16)
+SECRET_KEY=$(openssl rand -base64 32)
+JWT_SECRET_KEY=$(openssl rand -base64 32)
 VITE_API_BASE_URL=/api
-ENABLE_METRICS=true
 EOF
 
-# 2. 构建基础镜像
-docker build -t ssl-manager-backend-base:latest -f backend/Dockerfile.base ./backend
-docker build -t ssl-manager-frontend-base:latest -f frontend/Dockerfile.base ./frontend
-
-# 3. 启动完整服务（包含监控）
-docker-compose -f docker-compose.aliyun.yml --profile monitoring up -d
+# 2. 启动服务
+docker-compose up -d
 ```
 
-## 📋 系统要求（基于生产环境验证）
+## 📋 系统要求
 
 ### 推荐配置
-- **操作系统**: Ubuntu 22.04.5 LTS (已验证)
+- **操作系统**: Ubuntu 22.04.5 LTS
 - **架构**: x86_64
-- **内核**: >= 6.0 (支持cgroup v2)
-- **Docker**: 26.1.3+ (必须支持cgroup v2)
+- **Docker**: 26.1.3+
 - **Docker Compose**: v2.24.0+
 - **内存**: 16GB (最低8GB)
 - **CPU**: 4核心 (最低2核心)
 - **磁盘**: 系统盘40GB + 数据盘20GB
 - **网络**: 需要访问互联网
-
-### 关键要求
-- ⚠️ **cgroup v2支持**: 建议启用，用于系统监控兼容性
-- ⚠️ **端口号格式**: 环境变量中端口号必须使用字符串格式
 
 ## 🌐 服务访问地址
 
@@ -74,10 +68,6 @@ docker-compose -f docker-compose.aliyun.yml --profile monitoring up -d
 | 前端页面 | http://localhost/ | SSL证书管理界面 |
 | API接口 | http://localhost/api/ | REST API接口 |
 | API文档 | http://localhost/api/docs | Swagger API文档 |
-| ~~Prometheus~~ | ~~http://localhost/prometheus/~~ | ~~监控数据收集~~ (已移除) |
-| ~~Grafana~~ | ~~http://localhost/grafana/~~ | ~~可视化监控面板~~ (已移除) |
-
-**注**: 系统监控功能已移除，专注SSL证书管理核心业务功能
 
 ## 🔑 SSL证书管理功能
 
@@ -117,23 +107,21 @@ docker-compose -f docker-compose.aliyun.yml --profile monitoring up -d
 ## 🛠️ 管理命令
 
 ```bash
-# 查看服务状态 (生产环境)
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production ps
+# 使用统一管理脚本
+./scripts/ssl-manager.sh status          # 查看服务状态
+./scripts/ssl-manager.sh logs            # 查看服务日志
+./scripts/ssl-manager.sh restart         # 重启服务
+./scripts/ssl-manager.sh stop            # 停止服务
+./scripts/ssl-manager.sh verify --all    # 验证系统配置
 
-# 查看服务日志
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production logs -f
-
-# 重启特定服务
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml restart backend
-
-# 停止所有服务
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml --profile production down
+# 或使用Docker Compose命令
+docker-compose ps                         # 查看服务状态
+docker-compose logs -f                    # 查看服务日志
+docker-compose restart backend           # 重启特定服务
+docker-compose down                       # 停止所有服务
 
 # 备份数据库
 docker exec ssl-manager-mysql mysqldump -u ssl_manager -p ssl_manager > backup_$(date +%Y%m%d_%H%M%S).sql
-
-# 检查系统资源
-docker stats --no-stream && free -h
 ```
 
 ## 📊 功能特性
@@ -190,9 +178,7 @@ docker stats --no-stream && free -h
          │              │   (Database)    │    │     (Cache)     │
          │              └─────────────────┘    └─────────────────┘
          │
-         │
-         │ (系统监控已移除，专注SSL证书管理核心功能)
-         │
+
 ```
 
 ## 📁 项目结构

@@ -1,11 +1,5 @@
 # SSL证书管理系统 - Docker Compose配置
 
-# 网络配置 - 使用默认网络避免冲突
-#     driver: bridge
-#     ipam:
-#       config:
-#         - subnet: 10.10.10.0/24
-
 # 数据卷配置
 volumes:
   mysql_data:
@@ -18,9 +12,6 @@ volumes:
     driver: local
   nginx_logs:
     driver: local
-  # 系统监控数据卷已移除 (专注SSL证书管理核心功能)
-  # prometheus_data: 已移除
-  # grafana_data: 已移除
 
 services:
   # MySQL数据库
@@ -118,7 +109,6 @@ services:
       - ./backend/config:/app/config:ro
     ports:
       - "${BACKEND_PORT:-8000}:8000"
-      # 监控端口已移除，专注SSL证书管理功能
     depends_on:
       mysql:
         condition: service_healthy
@@ -143,8 +133,6 @@ services:
     restart: unless-stopped
     volumes:
       - nginx_logs:/var/log/nginx
-    # ports:
-    #   - "${FRONTEND_PORT:-80}:80"
     depends_on:
       - backend
     healthcheck:
@@ -186,19 +174,7 @@ services:
     profiles:
       - production
 
-  # 系统监控服务已移除 (专注SSL证书管理核心功能)
-  # SSL证书管理系统内置以下证书监控功能:
-  # - 主机域名监控：监控证书绑定的域名状态
-  # - 证书等级检查：DV、OV、EV证书类型识别
-  # - 加密方式验证：RSA、ECC等加密算法检查
-  # - 端口监控：443、80等端口的证书状态
-  # - IP类型识别：IPv4/IPv6支持检查
-  # - IP地址监控：证书绑定IP的可达性
-  # - 证书状态跟踪：有效、过期、即将过期状态
-  # - 有效期管理：剩余天数计算和到期提醒
-  # - 检测开关控制：启用/禁用特定证书的监控
-  # - 备注信息管理：证书相关的备注和标签
-  # - 操作功能：证书检测、编辑、删除等管理操作
+
 
   # 日志收集器（可选）
   fluentd:
@@ -214,5 +190,4 @@ services:
     profiles:
       - logging
 
-# 开发环境覆盖配置
-# 使用: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+

@@ -148,8 +148,11 @@ deploy_system() {
     
     # 选择部署配置
     local compose_file="docker-compose.yml"
-    if [ "$aliyun" = "true" ]; then
-        compose_file="docker-compose.aliyun.yml"
+    if [ "$env" = "prod" ]; then
+        compose_file="docker-compose.production.yml"
+        log_info "使用生产环境配置"
+    elif [ "$aliyun" = "true" ]; then
+        compose_file="docker-compose.yml"
         log_info "使用阿里云优化配置"
     fi
     
@@ -277,22 +280,22 @@ verify_system() {
         log_info "验证Docker Compose配置..."
 
         # 检查配置文件存在
-        if [ -f "docker-compose.aliyun.yml" ]; then
-            log_success "docker-compose.aliyun.yml文件存在"
+        if [ -f "docker-compose.yml" ]; then
+            log_success "docker-compose.yml文件存在"
 
             # 检查配置语法
-            if docker compose -f docker-compose.aliyun.yml config > /dev/null 2>&1; then
+            if docker compose -f docker-compose.yml config > /dev/null 2>&1; then
                 log_success "Docker Compose配置语法正确"
                 verification_passed=$((verification_passed + 1))
-            elif docker-compose -f docker-compose.aliyun.yml config > /dev/null 2>&1; then
+            elif docker-compose -f docker-compose.yml config > /dev/null 2>&1; then
                 log_success "Docker Compose配置语法正确 (使用docker-compose命令)"
                 verification_passed=$((verification_passed + 1))
             else
                 log_error "Docker Compose配置语法错误"
-                log_info "请检查配置文件: docker-compose.aliyun.yml"
+                log_info "请检查配置文件: docker-compose.yml"
             fi
         else
-            log_error "docker-compose.aliyun.yml文件不存在"
+            log_error "docker-compose.yml文件不存在"
         fi
     fi
 
@@ -393,10 +396,10 @@ fix_system() {
     if [ "$fix_compose" = "true" ]; then
         log_info "修复Docker Compose配置..."
         # 检查配置文件语法
-        if docker-compose -f docker-compose.aliyun.yml config > /dev/null 2>&1; then
+        if docker-compose -f docker-compose.yml config > /dev/null 2>&1; then
             log_success "Docker Compose配置正常"
         else
-            log_error "Docker Compose配置有误，请检查docker-compose.aliyun.yml文件"
+            log_error "Docker Compose配置有误，请检查docker-compose.yml文件"
         fi
     fi
 
