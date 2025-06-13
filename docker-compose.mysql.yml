@@ -39,7 +39,7 @@ services:
     networks:
       - ssl_manager_network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-ssl_manager_root_password}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "${MYSQL_USER:-ssl_manager}", "-p${MYSQL_PASSWORD:-ssl_manager_password}"]
       timeout: 20s
       retries: 10
       interval: 30s

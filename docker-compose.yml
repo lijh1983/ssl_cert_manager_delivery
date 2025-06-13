@@ -39,7 +39,7 @@ services:
       --collation-server=utf8mb4_unicode_ci
       --sql-mode=STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-ssl_manager_root_password}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "${MYSQL_USER:-ssl_manager}", "-p${MYSQL_PASSWORD:-ssl_manager_password}"]
       interval: 10s
       timeout: 5s
       retries: 5

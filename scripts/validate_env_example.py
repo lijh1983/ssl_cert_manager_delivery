@@ -121,8 +121,15 @@ def validate_env_example():
     docker_vars = get_required_vars_from_docker_compose()
     backend_vars = get_required_vars_from_backend()
     frontend_vars = get_required_vars_from_frontend()
-    
+
+    # 合并所有必需变量
     all_required_vars = docker_vars | backend_vars | frontend_vars
+
+    # 移除不应该在应用程序配置中的变量
+    docker_only_vars = {
+        'MYSQL_ROOT_PASSWORD',  # 仅用于Docker容器初始化，应用程序不应使用
+    }
+    all_required_vars = all_required_vars - docker_only_vars
     
     print(f"📋 发现 {len(all_required_vars)} 个必需的环境变量")
     
@@ -159,6 +166,11 @@ def validate_env_example():
         'MYSQL_PASSWORD': 8,
         'REDIS_PASSWORD': 8
     }
+
+    # 检查不合规的配置
+    security_violations = []
+    if 'MYSQL_ROOT_PASSWORD' in env_vars:
+        security_violations.append('MYSQL_ROOT_PASSWORD - 应用程序不应使用MySQL root用户')
     
     weak_vars = []
     for var, min_length in important_vars.items():
@@ -173,8 +185,14 @@ def validate_env_example():
         print(f"\n⚠️  需要更改的默认值 ({len(weak_vars)}个):")
         for var in weak_vars:
             print(f"  - {var}: 请设置强密码")
-    
-    if success and not missing_vars:
+
+    if security_violations:
+        print(f"\n🚨 安全违规配置 ({len(security_violations)}个):")
+        for violation in security_violations:
+            print(f"  - {violation}")
+        success = False
+
+    if success and not missing_vars and not security_violations:
         print("\n🎉 .env.example文件验证通过！")
         return True
     else:
