@@ -11,6 +11,8 @@
 - **[功能特性](SSL_CERTIFICATE_FEATURES.md)** - 核心功能详解
 - **[脚本使用示例](SCRIPT_USAGE_EXAMPLES.md)** - 部署脚本使用指南
 - **[开发规则](DEVELOPMENT_RULES.md)** - 开发和维护规范
+- **[环境配置指南](ENV_CONFIG_GUIDE.md)** - 环境变量配置说明
+- **[环境安全指南](ENVIRONMENT_SECURITY_GUIDE.md)** - 环境变量安全管理
 - **[更新日志](update.log)** - 版本更新记录
 
 ### ⚡ 一键部署（推荐）
@@ -28,22 +30,37 @@ cd ssl_cert_manager_delivery
 
 ### 手动部署
 
+#### 1. 选择配置模板
 ```bash
-# 1. 创建环境配置
-cat > .env <<EOF
-DOMAIN_NAME=ssl.gzyggl.com
-EMAIL=19822088@qq.com
-ENVIRONMENT=production
-MYSQL_DATABASE=ssl_manager
-MYSQL_USER=ssl_manager
-MYSQL_PASSWORD=$(openssl rand -base64 32)
-REDIS_PASSWORD=$(openssl rand -base64 32)
-SECRET_KEY=$(openssl rand -base64 32)
-JWT_SECRET_KEY=$(openssl rand -base64 32)
-VITE_API_BASE_URL=/api
-EOF
+# 独立部署环境 (推荐)
+cp .env.example .env
 
-# 2. 启动服务
+# 或 Docker环境
+cp .env.docker.example .env
+```
+
+#### 2. 修改配置文件
+```bash
+# 编辑配置文件
+nano .env
+
+# 必须修改的配置项 (包含CHANGE_THIS的项目)
+# - MYSQL_PASSWORD
+# - SECRET_KEY
+# - JWT_SECRET_KEY
+# - REDIS_PASSWORD
+# 等等...
+
+# 生成安全密钥
+openssl rand -base64 32  # 用于SECRET_KEY等
+```
+
+#### 3. 启动服务
+```bash
+# 独立部署
+./scripts/deploy-local.sh
+
+# 或 Docker环境
 docker-compose up -d
 ```
 
